@@ -176,13 +176,20 @@ http_request_handler!(async_access_handler, |request: &mut http::Request| {
     let event_data = unsafe {
         let ctx = request.get_inner().ctx.add(ngx_http_async_module.ctx_index);
         if (*ctx).is_null() {
-            let ctx_data = &mut *(request.pool().alloc(std::mem::size_of::<RequestCTX>()) as *mut RequestCTX);
-            ctx_data.event_data = Some(Arc::new(EventData {
-                done_flag: AtomicBool::new(false),
-                request: &request.get_inner() as *const _ as *mut _,
-            }));
-            *ctx = ctx_data as *const _ as _;
-            ctx_data.event_data.as_ref().unwrap().clone()
+            let mut ctx_data = request
+                .pool()
+                .allocate(RequestCTX {
+                    event_data: Some(Arc::new(EventData {
+                        done_flag: AtomicBool::new(false),
+                        request: &request.get_inner() as *const _ as *mut _,
+                    })),
+                })
+                .unwrap();
+
+            let ctx_data_clone = ctx_data.as_mut().event_data.as_ref().unwrap().clone();
+
+            *ctx = ctx_data.as_ptr() as *const _ as _;
+            ctx_data_clone
         } else {
             let ctx = &*(ctx as *const RequestCTX);
             if ctx
@@ -203,7 +210,8 @@ http_request_handler!(async_access_handler, |request: &mut http::Request| {
 
     // create a posted event
     unsafe {
-        let event = &mut *(request.pool().calloc(std::mem::size_of::<ngx_event_t>()) as *mut ngx_event_t);
+        let mut event = request.pool().allocate_uninit_zeroed::<ngx_event_t>().unwrap();
+        let event = event.as_mut().assume_init_mut();
         event.handler = Some(check_async_work_done);
         event.data = Arc::into_raw(event_data.clone()) as _;
         event.log = (*ngx_cycle).log;

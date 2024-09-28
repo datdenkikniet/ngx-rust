@@ -3,9 +3,11 @@ use crate::ffi::*;
 use crate::http::status::*;
 use crate::ngx_null_string;
 use std::fmt;
+use std::mem::MaybeUninit;
 use std::os::raw::c_void;
 
 use std::error::Error;
+use std::ptr::NonNull;
 use std::str::FromStr;
 
 /// Define a static request handler.
@@ -319,10 +321,10 @@ impl Request {
         let uri_ptr = unsafe { &mut ngx_str_t::from_str(self.0.pool, uri) as *mut _ };
         // -------------
         // allocate memory and set values for ngx_http_post_subrequest_t
-        let sub_ptr = self.pool().alloc(std::mem::size_of::<ngx_http_post_subrequest_t>());
+        let sub_ptr: NonNull<MaybeUninit<ngx_http_post_subrequest_t>> = self.pool().allocate_uninit_zeroed().unwrap();
 
         // assert!(sub_ptr.is_null());
-        let post_subreq = sub_ptr as *const ngx_http_post_subrequest_t as *mut ngx_http_post_subrequest_t;
+        let post_subreq = sub_ptr.as_ptr() as *mut ngx_http_post_subrequest_t;
         unsafe {
             (*post_subreq).handler = Some(post_callback);
             (*post_subreq).data = self.get_module_ctx_ptr(module); // WARN: safety! ensure that ctx is already set
@@ -336,7 +338,7 @@ impl Request {
                 uri_ptr,
                 std::ptr::null_mut(),
                 &mut psr as *mut _,
-                sub_ptr as *mut _,
+                sub_ptr.as_ptr() as *mut _,
                 NGX_HTTP_SUBREQUEST_WAITED as _,
             )
         };
@@ -348,11 +350,13 @@ impl Request {
          * allocate fake request body to avoid attempts to read it and to make
          * sure real body file (if already read) won't be closed by upstream
          */
-        sr.request_body = self.pool().alloc(std::mem::size_of::<ngx_http_request_body_t>()) as *mut _;
-
-        if sr.request_body.is_null() {
+        let body = if let Some(body) = self.pool().allocate_uninit_zeroed::<ngx_http_request_body_t>() {
+            body
+        } else {
             return Status::NGX_ERROR;
-        }
+        };
+
+        sr.request_body = body.as_ptr() as _;
         sr.set_header_only(1 as _);
         Status(r)
     }

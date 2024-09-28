@@ -151,10 +151,13 @@ http_upstream_init_peer_pt!(
     |request: &mut Request, us: *mut ngx_http_upstream_srv_conf_t| {
         ngx_log_debug_http!(request, "CUSTOM UPSTREAM request peer init");
 
-        let hcpd = request.pool().alloc_type::<UpstreamPeerData>();
-        if hcpd.is_null() {
+        let hcpd = if let Some(hcpd) = request.pool().allocate_uninit_zeroed::<UpstreamPeerData>() {
+            hcpd
+        } else {
             return Status::NGX_ERROR;
-        }
+        };
+
+        let hcpd = hcpd.as_ptr() as *mut UpstreamPeerData;
 
         let maybe_conf: Option<*const SrvConfig> =
             unsafe { ngx_http_conf_upstream_srv_conf_immutable(us, &*addr_of!(ngx_http_upstream_custom_module)) };
@@ -342,8 +345,10 @@ impl HTTPModule for Module {
 
     unsafe extern "C" fn create_srv_conf(cf: *mut ngx_conf_t) -> *mut c_void {
         let mut pool = Pool::from_ngx_pool((*cf).pool);
-        let conf = pool.alloc_type::<SrvConfig>();
-        if conf.is_null() {
+
+        let conf = if let Some(conf) = pool.allocate_uninit_zeroed::<SrvConfig>() {
+            conf
+        } else {
             ngx_conf_log_error(
                 NGX_LOG_EMERG as usize,
                 cf,
@@ -353,7 +358,9 @@ impl HTTPModule for Module {
                     .as_ptr() as *const c_char,
             );
             return std::ptr::null_mut();
-        }
+        };
+
+        let conf = conf.as_ptr() as *mut SrvConfig;
 
         (*conf).max = NGX_CONF_UNSET as u32;
 
