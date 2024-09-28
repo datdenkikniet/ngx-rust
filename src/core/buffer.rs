@@ -1,6 +1,6 @@
 use crate::ffi::*;
 
-use std::slice;
+use std::{ptr::NonNull, slice};
 
 /// The `Buffer` trait provides methods for working with an nginx buffer (`ngx_buf_t`).
 pub trait Buffer {
@@ -76,15 +76,14 @@ pub trait MutableBuffer: Buffer {
 }
 
 /// Wrapper struct for a temporary buffer, providing methods for working with an `ngx_buf_t`.
-pub struct TemporaryBuffer(*mut ngx_buf_t);
+pub struct TemporaryBuffer(NonNull<ngx_buf_t>);
 
 impl TemporaryBuffer {
     /// Creates a new `TemporaryBuffer` from an `ngx_buf_t` pointer.
     ///
     /// # Panics
     /// Panics if the given buffer pointer is null.
-    pub fn from_ngx_buf(buf: *mut ngx_buf_t) -> TemporaryBuffer {
-        assert!(!buf.is_null());
+    pub fn from_ngx_buf(buf: NonNull<ngx_buf_t>) -> TemporaryBuffer {
         TemporaryBuffer(buf)
     }
 }
@@ -92,12 +91,12 @@ impl TemporaryBuffer {
 impl Buffer for TemporaryBuffer {
     /// Returns the underlying `ngx_buf_t` pointer as a raw pointer.
     fn as_ngx_buf(&self) -> *const ngx_buf_t {
-        self.0
+        self.0.as_ptr()
     }
 
     /// Returns a mutable reference to the underlying `ngx_buf_t` pointer.
     fn as_ngx_buf_mut(&mut self) -> *mut ngx_buf_t {
-        self.0
+        self.0.as_ptr()
     }
 }
 
@@ -107,20 +106,19 @@ impl MutableBuffer for TemporaryBuffer {
     /// # Safety
     /// This function is marked as unsafe because it involves raw pointer manipulation.
     fn as_bytes_mut(&mut self) -> &mut [u8] {
-        unsafe { slice::from_raw_parts_mut((*self.0).pos, self.len()) }
+        unsafe { slice::from_raw_parts_mut((*self.0.as_ptr()).pos, self.len()) }
     }
 }
 
 /// Wrapper struct for a memory buffer, providing methods for working with an `ngx_buf_t`.
-pub struct MemoryBuffer(*mut ngx_buf_t);
+pub struct MemoryBuffer(NonNull<ngx_buf_t>);
 
 impl MemoryBuffer {
     /// Creates a new `MemoryBuffer` from an `ngx_buf_t` pointer.
     ///
     /// # Panics
     /// Panics if the given buffer pointer is null.
-    pub fn from_ngx_buf(buf: *mut ngx_buf_t) -> MemoryBuffer {
-        assert!(!buf.is_null());
+    pub fn from_ngx_buf(buf: NonNull<ngx_buf_t>) -> MemoryBuffer {
         MemoryBuffer(buf)
     }
 }
@@ -128,11 +126,11 @@ impl MemoryBuffer {
 impl Buffer for MemoryBuffer {
     /// Returns the underlying `ngx_buf_t` pointer as a raw pointer.
     fn as_ngx_buf(&self) -> *const ngx_buf_t {
-        self.0
+        self.0.as_ptr()
     }
 
     /// Returns a mutable reference to the underlying `ngx_buf_t` pointer.
     fn as_ngx_buf_mut(&mut self) -> *mut ngx_buf_t {
-        self.0
+        self.0.as_ptr()
     }
 }
