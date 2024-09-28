@@ -137,6 +137,9 @@ unsafe extern "C" fn check_async_work_done(event: *mut ngx_event_t) {
         // segfault. The best method that provides both thread-safety and performance requires
         // an nginx patch.
         post_event(event, addr_of_mut!(ngx_posted_events));
+        // We don't want our Arc to go out of scope yet, so `forget` it to
+        // prevent the count from being decreases when it is dropped.
+        std::mem::forget(data);
     }
 }
 
@@ -181,7 +184,7 @@ http_request_handler!(async_access_handler, |request: &mut http::Request| {
                 return core::Status::NGX_DONE;
             }
         } else {
-            // Create a new Arc stored on the heap.
+            // Create a new Arc.
             let ctx_data = Arc::new(EventData {
                 done_flag: AtomicBool::new(false),
                 request: &request.get_inner() as *const _ as *mut _,
