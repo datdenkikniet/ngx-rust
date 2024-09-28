@@ -140,9 +140,7 @@ unsafe extern "C" fn check_async_work_done(event: *mut ngx_event_t) {
     }
 }
 
-struct RequestCTX {
-    event_data: Option<Arc<EventData>>,
-}
+type RequestCTX = Arc<EventData>;
 
 struct EventData {
     done_flag: AtomicBool,
@@ -178,27 +176,19 @@ http_request_handler!(async_access_handler, |request: &mut http::Request| {
         if (*ctx).is_null() {
             let mut ctx_data = request
                 .pool()
-                .allocate(RequestCTX {
-                    event_data: Some(Arc::new(EventData {
-                        done_flag: AtomicBool::new(false),
-                        request: &request.get_inner() as *const _ as *mut _,
-                    })),
-                })
+                .allocate(Arc::new(EventData {
+                    done_flag: AtomicBool::new(false),
+                    request: &request.get_inner() as *const _ as *mut _,
+                }))
                 .unwrap();
 
-            let ctx_data_clone = ctx_data.as_mut().event_data.as_ref().unwrap().clone();
+            let ctx_data_clone = ctx_data.as_mut().clone();
 
             *ctx = ctx_data.as_ptr() as *const _ as _;
             ctx_data_clone
         } else {
             let ctx = &*(ctx as *const RequestCTX);
-            if ctx
-                .event_data
-                .as_ref()
-                .unwrap()
-                .done_flag
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
+            if ctx.as_ref().done_flag.load(std::sync::atomic::Ordering::Relaxed) {
                 return core::Status::NGX_OK;
             } else {
                 return core::Status::NGX_DONE;
@@ -210,8 +200,12 @@ http_request_handler!(async_access_handler, |request: &mut http::Request| {
 
     // create a posted event
     unsafe {
-        let mut event = request.pool().allocate_uninit_zeroed::<ngx_event_t>().unwrap();
-        let event = event.as_mut().assume_init_mut();
+        let event = request
+            .pool()
+            .allocate_uninit_zeroed::<ngx_event_t>()
+            .unwrap()
+            .as_mut()
+            .assume_init_mut();
         event.handler = Some(check_async_work_done);
         event.data = Arc::into_raw(event_data.clone()) as _;
         event.log = (*ngx_cycle).log;
