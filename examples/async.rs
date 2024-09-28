@@ -8,7 +8,7 @@ use ngx::http::MergeConfigError;
 use ngx::{core, core::Status, http, http::HTTPModule};
 use ngx::{http_request_handler, ngx_log_debug_http, ngx_null_command, ngx_string};
 use std::os::raw::{c_char, c_void};
-use std::ptr::{addr_of, addr_of_mut};
+use std::ptr::{addr_of, addr_of_mut, NonNull};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Instant;
@@ -173,26 +173,26 @@ http_request_handler!(async_access_handler, |request: &mut http::Request| {
 
     let event_data = unsafe {
         let ctx = request.get_inner().ctx.add(ngx_http_async_module.ctx_index);
-        if (*ctx).is_null() {
-            let mut ctx_data = request
-                .pool()
-                .allocate(Arc::new(EventData {
-                    done_flag: AtomicBool::new(false),
-                    request: &request.get_inner() as *const _ as *mut _,
-                }))
-                .unwrap();
-
-            let ctx_data_clone = ctx_data.as_mut().clone();
-
-            *ctx = ctx_data.as_ptr() as *const _ as _;
-            ctx_data_clone
-        } else {
-            let ctx = &*(ctx as *const RequestCTX);
-            if ctx.as_ref().done_flag.load(std::sync::atomic::Ordering::Relaxed) {
+        if let Some(ctx) = NonNull::new(*ctx) {
+            let ctx = &*(ctx.as_ptr() as *const RequestCTX);
+            if ctx.done_flag.load(std::sync::atomic::Ordering::Relaxed) {
                 return core::Status::NGX_OK;
             } else {
                 return core::Status::NGX_DONE;
             }
+        } else {
+            // Create a new Arc stored on the heap.
+            let ctx_data = Arc::new(EventData {
+                done_flag: AtomicBool::new(false),
+                request: &request.get_inner() as *const _ as *mut _,
+            });
+
+            // Store a copy of the Arc in the memory pool for this request,
+            // with cleanup handler that will decrement strong count when
+            // the pool is cleaned.
+            let ctx_data_pool = request.pool().allocate(ctx_data.clone()).unwrap();
+            *ctx = ctx_data_pool.as_ptr() as *const _ as _;
+            ctx_data
         }
     };
 
@@ -200,12 +200,8 @@ http_request_handler!(async_access_handler, |request: &mut http::Request| {
 
     // create a posted event
     unsafe {
-        let event = request
-            .pool()
-            .allocate_uninit_zeroed::<ngx_event_t>()
-            .unwrap()
-            .as_mut()
-            .assume_init_mut();
+        let mut event = request.pool().allocate_uninit_zeroed::<ngx_event_t>().unwrap();
+        let event = event.as_mut().assume_init_mut();
         event.handler = Some(check_async_work_done);
         event.data = Arc::into_raw(event_data.clone()) as _;
         event.log = (*ngx_cycle).log;
@@ -231,7 +227,8 @@ http_request_handler!(async_access_handler, |request: &mut http::Request| {
     });
 
     unsafe {
-        (*request.get_inner().main).set_count((*request.get_inner().main).count() + 1);
+        let main = (*request.get_inner()).main;
+        (*main).set_count((*main).count() + 1);
     }
     core::Status::NGX_DONE
 });
