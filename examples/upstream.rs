@@ -22,7 +22,7 @@ use ngx::{
     },
     http_upstream_init_peer_pt,
     log::DebugMask,
-    ngx_log_debug_http, ngx_log_debug_mask, ngx_null_command, ngx_string,
+    module_context, ngx_log_debug_http, ngx_log_debug_mask, ngx_null_command, ngx_string,
 };
 use std::{
     mem,
@@ -81,18 +81,11 @@ impl Default for UpstreamPeerData {
 }
 
 #[no_mangle]
-static ngx_http_upstream_custom_ctx: ngx_http_module_t = ngx_http_module_t {
-    preconfiguration: Some(Module::preconfiguration),
-    postconfiguration: Some(Module::postconfiguration),
-    create_main_conf: Some(Module::create_main_conf),
-    init_main_conf: Some(Module::init_main_conf),
-    create_srv_conf: Some(Module::create_srv_conf),
-    merge_srv_conf: Some(Module::merge_srv_conf),
-    create_loc_conf: Some(Module::create_loc_conf),
-    merge_loc_conf: Some(Module::merge_loc_conf),
-};
+#[allow(non_upper_case_globals)]
+static ngx_http_upstream_custom_ctx: ngx_http_module_t = module_context!(Module);
 
 #[no_mangle]
+#[allow(non_upper_case_globals)]
 static mut ngx_http_upstream_custom_commands: [ngx_command_t; 2] = [
     ngx_command_t {
         name: ngx_string!("custom"),
@@ -112,6 +105,7 @@ ngx::ngx_modules!(ngx_http_upstream_custom_module);
 
 #[no_mangle]
 #[used]
+#[allow(non_upper_case_globals)]
 pub static mut ngx_http_upstream_custom_module: ngx_module_t = ngx_module_t {
     ctx_index: ngx_uint_t::MAX,
     index: ngx_uint_t::MAX,
@@ -122,7 +116,7 @@ pub static mut ngx_http_upstream_custom_module: ngx_module_t = ngx_module_t {
     signature: NGX_RS_MODULE_SIGNATURE.as_ptr() as *const c_char,
 
     ctx: &ngx_http_upstream_custom_ctx as *const _ as *mut _,
-    commands: unsafe { &ngx_http_upstream_custom_commands[0] as *const _ as *mut _ },
+    commands: unsafe { addr_of!(ngx_http_upstream_custom_commands) as _ },
     type_: NGX_HTTP_MODULE as ngx_uint_t,
 
     init_master: None,

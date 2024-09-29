@@ -109,7 +109,7 @@ pub static mut ngx_http_awssigv4_module: ngx_module_t = ngx_module_t {
     signature: NGX_RS_MODULE_SIGNATURE.as_ptr() as *const c_char,
 
     ctx: &ngx_http_awssigv4_module_ctx as *const _ as *mut _,
-    commands: unsafe { &ngx_http_awssigv4_commands[0] as *const _ as *mut _ },
+    commands: unsafe { addr_of!(ngx_http_awssigv4_commands) as _ },
     type_: NGX_HTTP_MODULE as ngx_uint_t,
 
     init_master: None,
@@ -136,45 +136,40 @@ impl Merge for ModuleConfig {
             self.enable = true;
         };
 
-        if self.access_key.is_empty() {
-            self.access_key = String::from(if !prev.access_key.is_empty() {
-                &prev.access_key
+        let coalesce = |prev: &str, default: &str| {
+            if !prev.is_empty() {
+                prev.to_string()
             } else {
-                ""
-            });
+                default.to_string()
+            }
+        };
+
+        if self.access_key.is_empty() {
+            self.access_key = coalesce(&prev.access_key, "");
         }
+
         if self.enable && self.access_key.is_empty() {
             return Err(MergeConfigError::NoValue);
         }
 
         if self.secret_key.is_empty() {
-            self.secret_key = String::from(if !prev.secret_key.is_empty() {
-                &prev.secret_key
-            } else {
-                ""
-            });
+            self.secret_key = coalesce(&prev.secret_key, "");
         }
+
         if self.enable && self.secret_key.is_empty() {
             return Err(MergeConfigError::NoValue);
         }
 
         if self.s3_bucket.is_empty() {
-            self.s3_bucket = String::from(if !prev.s3_bucket.is_empty() {
-                &prev.s3_bucket
-            } else {
-                ""
-            });
+            self.s3_bucket = coalesce(&prev.s3_bucket, "");
         }
+
         if self.enable && self.s3_bucket.is_empty() {
             return Err(MergeConfigError::NoValue);
         }
 
         if self.s3_endpoint.is_empty() {
-            self.s3_endpoint = String::from(if !prev.s3_endpoint.is_empty() {
-                &prev.s3_endpoint
-            } else {
-                "s3.amazonaws.com"
-            });
+            self.s3_endpoint = coalesce(&self.s3_endpoint, "s3.amazonaws.com");
         }
         Ok(())
     }
@@ -193,9 +188,9 @@ extern "C" fn ngx_http_awssigv4_commands_set_enable(
     // set default value optionally
     conf.enable = false;
 
-    if val.len() == 2 && val.eq_ignore_ascii_case("on") {
+    if val.eq_ignore_ascii_case("on") {
         conf.enable = true;
-    } else if val.len() == 3 && val.eq_ignore_ascii_case("off") {
+    } else if val.eq_ignore_ascii_case("off") {
         conf.enable = false;
     }
 
