@@ -4,7 +4,7 @@ use ngx::ffi::{
     ngx_uint_t, NGX_CONF_TAKE1, NGX_HTTP_LOC_CONF, NGX_HTTP_MODULE, NGX_RS_HTTP_LOC_CONF_OFFSET,
     NGX_RS_MODULE_SIGNATURE,
 };
-use ngx::http::{Error, MergeConfigError, NgxConf, Phase};
+use ngx::http::{Config, Error, MergeConfigError, Phase};
 use ngx::{core, core::Status, http, http::HTTPModule};
 use ngx::{http_request_handler, ngx_log_debug_http, ngx_null_command, ngx_string};
 use std::os::raw::{c_char, c_void};
@@ -25,8 +25,8 @@ impl http::SafeHttpModule for Module {
         unsafe { addr_of!(ngx_http_core_module) }
     }
 
-    fn preconfiguration(mut cf: NgxConf) -> Result<(), Error> {
-        let mut cmcf = cf.main_conf();
+    fn preconfiguration(mut cf: Config) -> Result<(), Error> {
+        let mut cmcf = cf.core_main_conf();
         cmcf.add_phase_handler(Phase::Access, async_access_handler)
             .map_err(|_| Error::Error)?;
 

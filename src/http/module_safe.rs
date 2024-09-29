@@ -3,33 +3,22 @@
 use std::{
     ffi::{c_char, c_void},
     marker::PhantomData,
-    ptr::NonNull,
+    ptr::{addr_of, NonNull},
 };
 
-use nginx_sys::{
-    ngx_conf_t, ngx_http_core_main_conf_t, ngx_http_phase_t, ngx_http_phases, ngx_http_phases_NGX_HTTP_ACCESS_PHASE,
-    ngx_http_phases_NGX_HTTP_CONTENT_PHASE, ngx_http_phases_NGX_HTTP_FIND_CONFIG_PHASE,
-    ngx_http_phases_NGX_HTTP_LOG_PHASE, ngx_http_phases_NGX_HTTP_POST_ACCESS_PHASE,
-    ngx_http_phases_NGX_HTTP_POST_READ_PHASE, ngx_http_phases_NGX_HTTP_POST_REWRITE_PHASE,
-    ngx_http_phases_NGX_HTTP_PREACCESS_PHASE, ngx_http_phases_NGX_HTTP_PRECONTENT_PHASE,
-    ngx_http_phases_NGX_HTTP_REWRITE_PHASE, ngx_http_phases_NGX_HTTP_SERVER_REWRITE_PHASE, ngx_http_request_t,
-    ngx_int_t, ngx_module_t,
-};
+use nginx_sys::*;
 
 use crate::core::*;
 
 use super::{HTTPModule, Merge, MergeConfigError};
 
-pub struct NgxConf<'a> {
-    inner: *mut ngx_conf_t,
+pub struct Config<'a> {
+    inner: NonNull<ngx_conf_t>,
     module: *const ngx_module_t,
     _phantom: PhantomData<&'a ()>,
 }
 
-unsafe impl Sync for NgxConf<'_> {}
-unsafe impl Send for NgxConf<'_> {}
-
-impl<'a> NgxConf<'a> {
+impl<'a> Config<'a> {
     /// # SAFETY
     /// The lifetime of `Self` must correspond to the
     /// lifetime of `ngx_conf_t`
@@ -42,6 +31,8 @@ impl<'a> NgxConf<'a> {
             return None;
         }
 
+        let inner = NonNull::new(inner)?;
+
         Some(Self {
             inner,
             module,
@@ -50,25 +41,30 @@ impl<'a> NgxConf<'a> {
     }
 
     pub fn allocate<T>(&self, value: T) -> Option<NonNull<T>> {
-        let mut pool = unsafe { Pool::from_ngx_pool((*self.inner).pool) };
+        let mut pool = unsafe { Pool::from_ngx_pool((*self.inner.as_ptr()).pool) };
         pool.allocate(value)
     }
 
-    pub fn main_conf(&mut self) -> NgxMainConf {
-        let ptr = unsafe { &mut *super::ngx_http_conf_get_module_main_conf(self.inner, self.module) };
-        NgxMainConf::new(ptr).unwrap()
+    pub fn core_main_conf(&mut self) -> CoreMainConf {
+        let core_module = unsafe { addr_of!(ngx_http_core_module) };
+        let ptr = unsafe { super::ngx_http_conf_get_module_main_conf(self.inner.as_ptr(), core_module) };
+        unsafe { CoreMainConf::new(ptr).unwrap() }
     }
 }
 
-pub struct NgxMainConf<'a> {
-    inner: &'a mut ngx_http_core_main_conf_t,
+pub struct CoreMainConf<'a> {
+    conf: NonNull<ngx_http_core_main_conf_t>,
+    _phantom: PhantomData<&'a ()>,
 }
 
-impl NgxMainConf<'_> {
-    pub fn new(conf: *mut ngx_http_core_main_conf_t) -> Option<Self> {
-        let conf = unsafe { conf.as_mut()? };
-
-        Some(Self { inner: conf })
+impl CoreMainConf<'_> {
+    /// # SAFETY
+    /// `conf` must be valid for `'a`.
+    pub(crate) unsafe fn new(conf: *mut ngx_http_core_main_conf_t) -> Option<Self> {
+        Some(Self {
+            conf: NonNull::new(conf)?,
+            _phantom: Default::default(),
+        })
     }
 
     pub fn add_phase_handler(
@@ -76,7 +72,8 @@ impl NgxMainConf<'_> {
         phase: Phase,
         handler: extern "C" fn(*mut ngx_http_request_t) -> ngx_int_t,
     ) -> Result<(), ()> {
-        let phases = &mut self.inner.phases[phase as usize].handlers;
+        let phases = unsafe { &mut (*self.conf.as_ptr()).phases };
+        let phases = &mut phases[phase as usize].handlers;
 
         NgxArray::new(phases).push(handler)
     }
@@ -147,35 +144,35 @@ pub trait SafeHttpModule {
     /// module.
     fn module() -> *const ngx_module_t;
 
-    fn preconfiguration(cf: NgxConf) -> Result<(), Error> {
+    fn preconfiguration(cf: Config) -> Result<(), Error> {
         Ok(())
     }
 
-    fn postconfiguration(cf: NgxConf) -> Result<(), Error> {
+    fn postconfiguration(cf: Config) -> Result<(), Error> {
         Ok(())
     }
 
-    fn create_main_conf<'a>(cf: NgxConf<'a>) -> Option<NonNull<Self::MainConf>> {
+    fn create_main_conf<'a>(cf: Config<'a>) -> Option<NonNull<Self::MainConf>> {
         cf.allocate(Default::default())
     }
 
-    fn init_main_conf(cf: NgxConf, conf: &mut Self::MainConf) -> Result<(), ()> {
+    fn init_main_conf(cf: Config, conf: &mut Self::MainConf) -> Result<(), ()> {
         Ok(())
     }
 
-    fn create_srv_conf<'a>(cf: NgxConf<'a>) -> Option<NonNull<Self::SrvConf>> {
+    fn create_srv_conf<'a>(cf: Config<'a>) -> Option<NonNull<Self::SrvConf>> {
         cf.allocate(Default::default())
     }
 
-    fn merge_srv_conf(cf: NgxConf, prev: &mut Self::SrvConf, conf: &mut Self::SrvConf) -> Result<(), MergeConfigError> {
+    fn merge_srv_conf(cf: Config, prev: &mut Self::SrvConf, conf: &mut Self::SrvConf) -> Result<(), MergeConfigError> {
         conf.merge(prev)
     }
 
-    fn create_loc_conf<'a>(cf: NgxConf<'a>) -> Option<NonNull<Self::LocConf>> {
+    fn create_loc_conf<'a>(cf: Config<'a>) -> Option<NonNull<Self::LocConf>> {
         cf.allocate(Default::default())
     }
 
-    fn merge_loc_conf(cf: NgxConf, prev: &mut Self::LocConf, conf: &mut Self::LocConf) -> Result<(), MergeConfigError> {
+    fn merge_loc_conf(cf: Config, prev: &mut Self::LocConf, conf: &mut Self::LocConf) -> Result<(), MergeConfigError> {
         prev.merge(conf)
     }
 }
@@ -191,7 +188,7 @@ where
     type LocConf = <Self as SafeHttpModule>::LocConf;
 
     unsafe extern "C" fn preconfiguration(cf: *mut ngx_conf_t) -> ngx_int_t {
-        let cf = if let Some(cf) = NgxConf::new(cf, <Self as SafeHttpModule>::module()) {
+        let cf = if let Some(cf) = Config::new(cf, <Self as SafeHttpModule>::module()) {
             cf
         } else {
             return Status::NGX_ERROR.into();
@@ -206,7 +203,7 @@ where
     }
 
     unsafe extern "C" fn postconfiguration(cf: *mut ngx_conf_t) -> ngx_int_t {
-        let cf = if let Some(cf) = NgxConf::new(cf, <Self as SafeHttpModule>::module()) {
+        let cf = if let Some(cf) = Config::new(cf, <Self as SafeHttpModule>::module()) {
             cf
         } else {
             return Status::NGX_ERROR.into();
@@ -221,7 +218,7 @@ where
     }
 
     unsafe extern "C" fn create_main_conf(cf: *mut ngx_conf_t) -> *mut c_void {
-        let cf = if let Some(cf) = NgxConf::new(cf, <Self as SafeHttpModule>::module()) {
+        let cf = if let Some(cf) = Config::new(cf, <Self as SafeHttpModule>::module()) {
             cf
         } else {
             return std::ptr::null_mut() as _;
@@ -233,7 +230,7 @@ where
     }
 
     unsafe extern "C" fn init_main_conf(cf: *mut ngx_conf_t, conf: *mut c_void) -> *mut c_char {
-        let cf = if let Some(cf) = NgxConf::new(cf, <Self as SafeHttpModule>::module()) {
+        let cf = if let Some(cf) = Config::new(cf, <Self as SafeHttpModule>::module()) {
             cf
         } else {
             return NGX_CONF_ERROR as _;
@@ -252,7 +249,7 @@ where
     }
 
     unsafe extern "C" fn create_srv_conf(cf: *mut ngx_conf_t) -> *mut c_void {
-        let cf = if let Some(cf) = NgxConf::new(cf, <Self as SafeHttpModule>::module()) {
+        let cf = if let Some(cf) = Config::new(cf, <Self as SafeHttpModule>::module()) {
             cf
         } else {
             return std::ptr::null_mut() as _;
@@ -264,7 +261,7 @@ where
     }
 
     unsafe extern "C" fn merge_srv_conf(cf: *mut ngx_conf_t, prev: *mut c_void, conf: *mut c_void) -> *mut c_char {
-        let cf = if let Some(cf) = NgxConf::new(cf, <Self as SafeHttpModule>::module()) {
+        let cf = if let Some(cf) = Config::new(cf, <Self as SafeHttpModule>::module()) {
             cf
         } else {
             return NGX_CONF_ERROR as _;
@@ -289,7 +286,7 @@ where
     }
 
     unsafe extern "C" fn create_loc_conf(cf: *mut ngx_conf_t) -> *mut c_void {
-        let cf = if let Some(cf) = NgxConf::new(cf, <Self as SafeHttpModule>::module()) {
+        let cf = if let Some(cf) = Config::new(cf, <Self as SafeHttpModule>::module()) {
             cf
         } else {
             return std::ptr::null_mut() as _;
@@ -301,7 +298,7 @@ where
     }
 
     unsafe extern "C" fn merge_loc_conf(cf: *mut ngx_conf_t, prev: *mut c_void, conf: *mut c_void) -> *mut c_char {
-        let cf = if let Some(cf) = NgxConf::new(cf, <Self as SafeHttpModule>::module()) {
+        let cf = if let Some(cf) = Config::new(cf, <Self as SafeHttpModule>::module()) {
             cf
         } else {
             return NGX_CONF_ERROR as _;
