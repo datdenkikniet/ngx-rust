@@ -1,33 +1,34 @@
 use http::HeaderMap;
+use ngx::core::Array;
 use ngx::ffi::{
-    nginx_version, ngx_array_push, ngx_command_t, ngx_conf_t, ngx_http_core_module, ngx_http_handler_pt,
-    ngx_http_module_t, ngx_http_phases_NGX_HTTP_PRECONTENT_PHASE, ngx_http_request_t, ngx_int_t, ngx_module_t,
+    nginx_version, ngx_command_t, ngx_conf_t, ngx_http_module_t, ngx_http_request_t, ngx_int_t, ngx_module_t,
     ngx_str_t, ngx_uint_t, NGX_CONF_TAKE1, NGX_HTTP_LOC_CONF, NGX_HTTP_MODULE, NGX_HTTP_SRV_CONF,
     NGX_RS_HTTP_LOC_CONF_OFFSET, NGX_RS_MODULE_SIGNATURE,
 };
 use ngx::{core, core::Status, http::*};
-use ngx::{http_request_handler, ngx_log_debug_http, ngx_null_command, ngx_string};
+use ngx::{http_request_handler, module_context, ngx_log_debug_http, ngx_null_command, ngx_string};
 use std::os::raw::{c_char, c_void};
 use std::ptr::addr_of;
 
+unsafe fn args<'a>(conf: *mut ngx_conf_t) -> Option<Array<'a, ngx_str_t>> {
+    Array::new_raw((*conf).args)
+}
+
 struct Module;
 
-impl HTTPModule for Module {
+impl SafeHttpModule for Module {
     type MainConf = ();
     type SrvConf = ();
     type LocConf = ModuleConfig;
 
-    unsafe extern "C" fn postconfiguration(cf: *mut ngx_conf_t) -> ngx_int_t {
-        let cmcf = ngx_http_conf_get_module_main_conf(cf, &*addr_of!(ngx_http_core_module));
+    fn module() -> *const ngx_module_t {
+        unsafe { addr_of!(ngx_http_awssigv4_module) }
+    }
 
-        let h = ngx_array_push(&mut (*cmcf).phases[ngx_http_phases_NGX_HTTP_PRECONTENT_PHASE as usize].handlers)
-            as *mut ngx_http_handler_pt;
-        if h.is_null() {
-            return core::Status::NGX_ERROR.into();
-        }
-        // set an phase handler
-        *h = Some(awssigv4_header_handler);
-        core::Status::NGX_OK.into()
+    fn postconfiguration(mut cf: Config) -> Result<(), Error> {
+        cf.core_main_conf()
+            .add_phase_handler(Phase::PreContent, awssigv4_header_handler)
+            .map_err(|_| Error::Error)
     }
 }
 
@@ -41,6 +42,7 @@ struct ModuleConfig {
 }
 
 #[no_mangle]
+#[allow(non_upper_case_globals)]
 static mut ngx_http_awssigv4_commands: [ngx_command_t; 6] = [
     ngx_command_t {
         name: ngx_string!("awssigv4"),
@@ -86,16 +88,8 @@ static mut ngx_http_awssigv4_commands: [ngx_command_t; 6] = [
 ];
 
 #[no_mangle]
-static ngx_http_awssigv4_module_ctx: ngx_http_module_t = ngx_http_module_t {
-    preconfiguration: Some(Module::preconfiguration),
-    postconfiguration: Some(Module::postconfiguration),
-    create_main_conf: Some(Module::create_main_conf),
-    init_main_conf: Some(Module::init_main_conf),
-    create_srv_conf: Some(Module::create_srv_conf),
-    merge_srv_conf: Some(Module::merge_srv_conf),
-    create_loc_conf: Some(Module::create_loc_conf),
-    merge_loc_conf: Some(Module::merge_loc_conf),
-};
+#[allow(non_upper_case_globals)]
+static ngx_http_awssigv4_module_ctx: ngx_http_module_t = module_context!(Module);
 
 // Generate the `ngx_modules` table with exported modules.
 // This feature is required to build a 'cdylib' dynamic module outside of the NGINX buildsystem.
@@ -104,6 +98,7 @@ ngx::ngx_modules!(ngx_http_awssigv4_module);
 
 #[no_mangle]
 #[used]
+#[allow(non_upper_case_globals)]
 pub static mut ngx_http_awssigv4_module: ngx_module_t = ngx_module_t {
     ctx_index: ngx_uint_t::MAX,
     index: ngx_uint_t::MAX,
@@ -191,20 +186,18 @@ extern "C" fn ngx_http_awssigv4_commands_set_enable(
     _cmd: *mut ngx_command_t,
     conf: *mut c_void,
 ) -> *mut c_char {
-    unsafe {
-        let conf = &mut *(conf as *mut ModuleConfig);
-        let args = (*(*cf).args).elts as *mut ngx_str_t;
-        let val = (*args.add(1)).to_str();
+    let conf = unsafe { (conf as *mut ModuleConfig).as_mut() }.unwrap();
+    let args = unsafe { args(cf) }.unwrap();
+    let val = args[1].to_str();
 
-        // set default value optionally
+    // set default value optionally
+    conf.enable = false;
+
+    if val.len() == 2 && val.eq_ignore_ascii_case("on") {
+        conf.enable = true;
+    } else if val.len() == 3 && val.eq_ignore_ascii_case("off") {
         conf.enable = false;
-
-        if val.len() == 2 && val.eq_ignore_ascii_case("on") {
-            conf.enable = true;
-        } else if val.len() == 3 && val.eq_ignore_ascii_case("off") {
-            conf.enable = false;
-        }
-    };
+    }
 
     std::ptr::null_mut()
 }
@@ -215,11 +208,9 @@ extern "C" fn ngx_http_awssigv4_commands_set_access_key(
     _cmd: *mut ngx_command_t,
     conf: *mut c_void,
 ) -> *mut c_char {
-    unsafe {
-        let conf = &mut *(conf as *mut ModuleConfig);
-        let args = (*(*cf).args).elts as *mut ngx_str_t;
-        conf.access_key = (*args.add(1)).to_string();
-    };
+    let conf = unsafe { (conf as *mut ModuleConfig).as_mut() }.unwrap();
+    let args = unsafe { args(cf) }.unwrap();
+    conf.access_key = args[1].to_string();
 
     std::ptr::null_mut()
 }
@@ -230,11 +221,10 @@ extern "C" fn ngx_http_awssigv4_commands_set_secret_key(
     _cmd: *mut ngx_command_t,
     conf: *mut c_void,
 ) -> *mut c_char {
-    unsafe {
-        let conf = &mut *(conf as *mut ModuleConfig);
-        let args = (*(*cf).args).elts as *mut ngx_str_t;
-        conf.secret_key = (*args.add(1)).to_string();
-    };
+    let conf = unsafe { (conf as *mut ModuleConfig).as_mut() }.unwrap();
+    let args = unsafe { args(cf) }.unwrap();
+
+    conf.secret_key = args[1].to_string();
 
     std::ptr::null_mut()
 }
@@ -245,15 +235,15 @@ extern "C" fn ngx_http_awssigv4_commands_set_s3_bucket(
     _cmd: *mut ngx_command_t,
     conf: *mut c_void,
 ) -> *mut c_char {
-    unsafe {
-        let conf = &mut *(conf as *mut ModuleConfig);
-        let args = (*(*cf).args).elts as *mut ngx_str_t;
-        conf.s3_bucket = (*args.add(1)).to_string();
-        if conf.s3_bucket.len() == 1 {
-            println!("Validation failed");
-            return ngx::core::NGX_CONF_ERROR as _;
-        }
-    };
+    let conf = unsafe { (conf as *mut ModuleConfig).as_mut() }.unwrap();
+    let args = unsafe { args(cf) }.unwrap();
+
+    conf.s3_bucket = args[1].to_string();
+    if conf.s3_bucket.len() == 1 {
+        println!("Validation failed");
+        return ngx::core::NGX_CONF_ERROR as _;
+    }
+
     std::ptr::null_mut()
 }
 
@@ -263,11 +253,10 @@ extern "C" fn ngx_http_awssigv4_commands_set_s3_endpoint(
     _cmd: *mut ngx_command_t,
     conf: *mut c_void,
 ) -> *mut c_char {
-    unsafe {
-        let conf = &mut *(conf as *mut ModuleConfig);
-        let args = (*(*cf).args).elts as *mut ngx_str_t;
-        conf.s3_endpoint = (*args.add(1)).to_string();
-    };
+    let conf = unsafe { (conf as *mut ModuleConfig).as_mut() }.unwrap();
+    let args = unsafe { args(cf) }.unwrap();
+
+    conf.s3_endpoint = args[1].to_string();
 
     std::ptr::null_mut()
 }

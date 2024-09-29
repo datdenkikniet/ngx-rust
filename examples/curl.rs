@@ -10,6 +10,10 @@ use ngx::{http_request_handler, module_context, ngx_log_debug_http, ngx_null_com
 use std::os::raw::{c_char, c_void};
 use std::ptr::addr_of;
 
+unsafe fn args<'a>(conf: *mut ngx_conf_t) -> Option<Array<'a, ngx_str_t>> {
+    Array::new_raw((*conf).args)
+}
+
 struct Module;
 
 impl http::SafeHttpModule for Module {
@@ -127,16 +131,16 @@ extern "C" fn ngx_http_curl_commands_set_enable(
     conf: *mut c_void,
 ) -> *mut c_char {
     let conf: &mut _ = unsafe { (conf as *mut ModuleConfig).as_mut() }.unwrap();
-    let args = unsafe { Array::<ngx_str_t>::new_raw((*cf).args).unwrap() };
+    let args = unsafe { args(cf) }.unwrap();
 
     let val = args[1].to_str();
 
     // set default value optionally
     conf.enable = false;
 
-    if val.len() == 2 && val.eq_ignore_ascii_case("on") {
+    if val.eq_ignore_ascii_case("on") {
         conf.enable = true;
-    } else if val.len() == 3 && val.eq_ignore_ascii_case("off") {
+    } else if val.eq_ignore_ascii_case("off") {
         conf.enable = false;
     }
 
