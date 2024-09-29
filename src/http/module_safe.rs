@@ -14,7 +14,7 @@ use super::{HTTPModule, Merge, MergeConfigError};
 
 pub struct Config<'a> {
     inner: NonNull<ngx_conf_t>,
-    module: *const ngx_module_t,
+    module: NonNull<ngx_module_t>,
     _phantom: PhantomData<&'a ()>,
 }
 
@@ -23,15 +23,8 @@ impl<'a> Config<'a> {
     /// The lifetime of `Self` must correspond to the
     /// lifetime of `ngx_conf_t`
     pub unsafe fn new(inner: *mut ngx_conf_t, module: *const ngx_module_t) -> Option<Self> {
-        if inner.is_null() || !inner.is_aligned() {
-            return None;
-        }
-
-        if module.is_null() || !module.is_aligned() {
-            return None;
-        }
-
         let inner = NonNull::new(inner)?;
+        let module = NonNull::new(module as _)?;
 
         Some(Self {
             inner,
