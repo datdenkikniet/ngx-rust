@@ -1,10 +1,10 @@
 use ngx::ffi::{
-    nginx_version, ngx_array_push, ngx_command_t, ngx_conf_t, ngx_cycle, ngx_event_t, ngx_http_core_module,
-    ngx_http_core_run_phases, ngx_http_handler_pt, ngx_http_module_t, ngx_http_phases_NGX_HTTP_ACCESS_PHASE,
-    ngx_http_request_t, ngx_int_t, ngx_module_t, ngx_posted_events, ngx_queue_s, ngx_str_t, ngx_uint_t, NGX_CONF_TAKE1,
-    NGX_HTTP_LOC_CONF, NGX_HTTP_MODULE, NGX_RS_HTTP_LOC_CONF_OFFSET, NGX_RS_MODULE_SIGNATURE,
+    nginx_version, ngx_command_t, ngx_conf_t, ngx_cycle, ngx_event_t, ngx_http_core_module, ngx_http_core_run_phases,
+    ngx_http_module_t, ngx_http_request_t, ngx_int_t, ngx_module_t, ngx_posted_events, ngx_queue_s, ngx_str_t,
+    ngx_uint_t, NGX_CONF_TAKE1, NGX_HTTP_LOC_CONF, NGX_HTTP_MODULE, NGX_RS_HTTP_LOC_CONF_OFFSET,
+    NGX_RS_MODULE_SIGNATURE,
 };
-use ngx::http::MergeConfigError;
+use ngx::http::{Error, MergeConfigError, NgxConf, Phase};
 use ngx::{core, core::Status, http, http::HTTPModule};
 use ngx::{http_request_handler, ngx_log_debug_http, ngx_null_command, ngx_string};
 use std::os::raw::{c_char, c_void};
@@ -16,22 +16,21 @@ use tokio::runtime::Runtime;
 
 struct Module;
 
-impl http::HTTPModule for Module {
+impl http::SafeHttpModule for Module {
     type MainConf = ();
     type SrvConf = ();
     type LocConf = ModuleConfig;
 
-    unsafe extern "C" fn postconfiguration(cf: *mut ngx_conf_t) -> ngx_int_t {
-        let cmcf = http::ngx_http_conf_get_module_main_conf(cf, &*addr_of!(ngx_http_core_module));
+    fn module() -> *const ngx_module_t {
+        unsafe { addr_of!(ngx_http_core_module) }
+    }
 
-        let h = ngx_array_push(&mut (*cmcf).phases[ngx_http_phases_NGX_HTTP_ACCESS_PHASE as usize].handlers)
-            as *mut ngx_http_handler_pt;
-        if h.is_null() {
-            return core::Status::NGX_ERROR.into();
-        }
-        // set an Access phase handler
-        *h = Some(async_access_handler);
-        core::Status::NGX_OK.into()
+    fn preconfiguration(mut cf: NgxConf) -> Result<(), Error> {
+        let mut cmcf = cf.main_conf();
+        cmcf.add_phase_handler(Phase::Access, async_access_handler)
+            .map_err(|_| Error::Error)?;
+
+        Ok(())
     }
 }
 
