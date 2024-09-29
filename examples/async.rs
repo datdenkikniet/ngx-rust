@@ -5,8 +5,8 @@ use ngx::ffi::{
     NGX_RS_MODULE_SIGNATURE,
 };
 use ngx::http::{Config, Error, MergeConfigError, Phase};
-use ngx::{core, core::Status, http, http::HTTPModule};
-use ngx::{http_request_handler, ngx_log_debug_http, ngx_null_command, ngx_string};
+use ngx::{core, core::Status, http};
+use ngx::{http_request_handler, module_context, ngx_log_debug_http, ngx_null_command, ngx_string};
 use std::os::raw::{c_char, c_void};
 use std::ptr::{addr_of, addr_of_mut, NonNull};
 use std::sync::atomic::AtomicBool;
@@ -53,6 +53,7 @@ impl Default for ModuleConfig {
 }
 
 #[no_mangle]
+#[allow(non_upper_case_globals)]
 static mut ngx_http_async_commands: [ngx_command_t; 2] = [
     ngx_command_t {
         name: ngx_string!("async"),
@@ -66,16 +67,8 @@ static mut ngx_http_async_commands: [ngx_command_t; 2] = [
 ];
 
 #[no_mangle]
-static ngx_http_async_module_ctx: ngx_http_module_t = ngx_http_module_t {
-    preconfiguration: Some(Module::preconfiguration),
-    postconfiguration: Some(Module::postconfiguration),
-    create_main_conf: Some(Module::create_main_conf),
-    init_main_conf: Some(Module::init_main_conf),
-    create_srv_conf: Some(Module::create_srv_conf),
-    merge_srv_conf: Some(Module::merge_srv_conf),
-    create_loc_conf: Some(Module::create_loc_conf),
-    merge_loc_conf: Some(Module::merge_loc_conf),
-};
+#[allow(non_upper_case_globals)]
+static ngx_http_async_module_ctx: ngx_http_module_t = module_context!(Module);
 
 // Generate the `ngx_modules` table with exported modules.
 // This feature is required to build a 'cdylib' dynamic module outside of the NGINX buildsystem.
@@ -84,6 +77,7 @@ ngx::ngx_modules!(ngx_http_async_module);
 
 #[no_mangle]
 #[used]
+#[allow(non_upper_case_globals)]
 pub static mut ngx_http_async_module: ngx_module_t = ngx_module_t {
     ctx_index: ngx_uint_t::MAX,
     index: ngx_uint_t::MAX,

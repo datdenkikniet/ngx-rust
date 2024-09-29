@@ -14,7 +14,7 @@ use super::{HTTPModule, Merge, MergeConfigError};
 
 pub struct Config<'a> {
     inner: NonNull<ngx_conf_t>,
-    module: NonNull<ngx_module_t>,
+    _module: NonNull<ngx_module_t>,
     _phantom: PhantomData<&'a ()>,
 }
 
@@ -28,7 +28,7 @@ impl<'a> Config<'a> {
 
         Some(Self {
             inner,
-            module,
+            _module: module,
             _phantom: Default::default(),
         })
     }
@@ -137,11 +137,11 @@ pub trait SafeHttpModule {
     /// module.
     fn module() -> *const ngx_module_t;
 
-    fn preconfiguration(cf: Config) -> Result<(), Error> {
+    fn preconfiguration(_cf: Config) -> Result<(), Error> {
         Ok(())
     }
 
-    fn postconfiguration(cf: Config) -> Result<(), Error> {
+    fn postconfiguration(_cf: Config) -> Result<(), Error> {
         Ok(())
     }
 
@@ -149,7 +149,7 @@ pub trait SafeHttpModule {
         cf.allocate(Default::default())
     }
 
-    fn init_main_conf(cf: Config, conf: &mut Self::MainConf) -> Result<(), ()> {
+    fn init_main_conf(_cf: Config, _conf: &mut Self::MainConf) -> Result<(), ()> {
         Ok(())
     }
 
@@ -157,7 +157,7 @@ pub trait SafeHttpModule {
         cf.allocate(Default::default())
     }
 
-    fn merge_srv_conf(cf: Config, prev: &mut Self::SrvConf, conf: &mut Self::SrvConf) -> Result<(), MergeConfigError> {
+    fn merge_srv_conf(_cf: Config, prev: &mut Self::SrvConf, conf: &mut Self::SrvConf) -> Result<(), MergeConfigError> {
         conf.merge(prev)
     }
 
@@ -165,7 +165,7 @@ pub trait SafeHttpModule {
         cf.allocate(Default::default())
     }
 
-    fn merge_loc_conf(cf: Config, prev: &mut Self::LocConf, conf: &mut Self::LocConf) -> Result<(), MergeConfigError> {
+    fn merge_loc_conf(_cf: Config, prev: &mut Self::LocConf, conf: &mut Self::LocConf) -> Result<(), MergeConfigError> {
         prev.merge(conf)
     }
 }
