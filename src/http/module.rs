@@ -2,7 +2,6 @@ use crate::core::NGX_CONF_ERROR;
 use crate::core::*;
 use crate::ffi::*;
 
-use core::ptr;
 use std::os::raw::{c_char, c_void};
 
 /// MergeConfigError - configuration cannot be merged with levels above.
@@ -91,7 +90,7 @@ pub trait HTTPModule {
     /// Callers should provide valid non-null `ngx_conf_t` arguments. Implementers must
     /// guard against null inputs or risk runtime errors.
     unsafe extern "C" fn init_main_conf(_cf: *mut ngx_conf_t, _conf: *mut c_void) -> *mut c_char {
-        ptr::null_mut()
+        NGX_CONF_OK as _
     }
 
     /// # Safety
@@ -118,7 +117,7 @@ pub trait HTTPModule {
         let prev = &mut *(prev as *mut Self::SrvConf);
         let conf = &mut *(conf as *mut Self::SrvConf);
         match conf.merge(prev) {
-            Ok(_) => ptr::null_mut(),
+            Ok(_) => NGX_CONF_OK as _,
             Err(_) => NGX_CONF_ERROR as _,
         }
     }
@@ -147,7 +146,7 @@ pub trait HTTPModule {
         let prev = &mut *(prev as *mut Self::LocConf);
         let conf = &mut *(conf as *mut Self::LocConf);
         match conf.merge(prev) {
-            Ok(_) => ptr::null_mut(),
+            Ok(_) => NGX_CONF_OK as _,
             Err(_) => NGX_CONF_ERROR as _,
         }
     }

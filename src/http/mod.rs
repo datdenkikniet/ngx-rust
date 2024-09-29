@@ -1,5 +1,6 @@
 mod conf;
 mod module;
+pub mod module_safe;
 mod request;
 mod status;
 mod upstream;

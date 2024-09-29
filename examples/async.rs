@@ -202,13 +202,15 @@ http_request_handler!(async_access_handler, |request: &mut http::Request| {
     event_data.done_flag.load(std::sync::atomic::Ordering::Relaxed);
 
     // create a posted event
-    unsafe {
-        let mut event = request.pool().allocate_uninit_zeroed::<ngx_event_t>().unwrap();
-        let event = event.as_mut().assume_init_mut();
-        event.handler = Some(check_async_work_done);
-        event.data = Arc::into_raw(event_data.clone()) as _;
-        event.log = (*ngx_cycle).log;
+    let mut event = request.pool().allocate_uninit_zeroed::<ngx_event_t>().unwrap();
 
+    // SAFETY: all-zeroes ngx_event_t is valid (?)
+    let event = unsafe { event.as_mut().assume_init_mut() };
+    event.handler = Some(check_async_work_done);
+    event.data = Arc::into_raw(event_data.clone()) as _;
+    event.log = unsafe { (*ngx_cycle).log };
+
+    unsafe {
         post_event(event, addr_of_mut!(ngx_posted_events));
     }
 
