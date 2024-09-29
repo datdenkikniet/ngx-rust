@@ -143,6 +143,8 @@ pub trait SafeHttpModule {
     /// Configuration in a `location` block within the `http` block.
     type LocConf: Merge + Default;
 
+    /// Get a pointer to the NGINX-initialized [`ngx_module_t`] that defines this
+    /// module.
     fn module() -> *const ngx_module_t;
 
     fn preconfiguration(cf: NgxConf) -> Result<(), Error> {

@@ -7,8 +7,8 @@ use nginx_sys::{ngx_array_push, ngx_array_t};
 /// `T` should be limited to non-[`Drop`] types as there
 /// is no way to explicitly drop values in the array.
 pub struct NgxArray<'a, T> {
-    array: &'a mut ngx_array_t,
-    _phantom: PhantomData<T>,
+    array: *mut ngx_array_t,
+    _phantom: PhantomData<&'a T>,
 }
 
 impl<'a, T> NgxArray<'a, T> {
@@ -40,5 +40,35 @@ impl<'a, T> NgxArray<'a, T> {
 
         unsafe { std::ptr::write(new_value_ptr as _, value) };
         Ok(())
+    }
+}
+
+impl<'a, T> core::ops::Deref for NgxArray<'a, T> {
+    type Target = [T];
+
+    fn deref(&self) -> &Self::Target {
+        // SAFETY: `self.array` is a valid pointer.
+        let array = unsafe { *self.array };
+
+        let ptr = array.elts as *const T;
+        let n_elements = array.nelts;
+
+        // SAFETY: `ptr` points to `n_elements` valid `T`s that
+        // are valid for `'a`.
+        unsafe { core::slice::from_raw_parts(ptr, n_elements) }
+    }
+}
+
+impl<'a, T> core::ops::DerefMut for NgxArray<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        // SAFETY: `self.array` is a valid pointer.
+        let array = unsafe { *self.array };
+
+        let ptr = array.elts as *mut T;
+        let n_elements = array.nelts;
+
+        // SAFETY: `ptr` points to `n_elements` valid `T`s that
+        // are valid for `'a`.
+        unsafe { core::slice::from_raw_parts_mut(ptr, n_elements) }
     }
 }
