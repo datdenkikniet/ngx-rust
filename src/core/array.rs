@@ -6,24 +6,31 @@ use nginx_sys::{ngx_array_push, ngx_array_t};
 ///
 /// `T` should be limited to non-[`Drop`] types as there
 /// is no way to explicitly drop values in the array.
-pub struct NgxArray<'a, T> {
+pub struct Array<'a, T> {
     array: *mut ngx_array_t,
     _phantom: PhantomData<&'a T>,
 }
 
-impl<'a, T> NgxArray<'a, T> {
+impl<'a, T> Array<'a, T> {
     /// Create a new [`NgxArray`] from a raw pointer.
     ///
+    /// If `T` has drop logic, pushing to the array created from
+    /// this pointer will leak memory, as [`Drop`] is not ran
+    /// for any elements.
     /// # SAFETY
     /// The lifetime `'a` of `Self` must not outlive the lifetime
     /// of the passed-in pointer.
-    pub(crate) unsafe fn new_raw(array: *mut ngx_array_t) -> Option<Self> {
+    pub unsafe fn new_raw(array: *mut ngx_array_t) -> Option<Self> {
         let array = array.as_mut()?;
         Some(Self::new(array))
     }
 
     /// Create a new wrapper around [`ngx_array_t`]
-    pub(crate) fn new(array: &'a mut ngx_array_t) -> Self {
+    ///
+    /// If `T` has drop logic, pushing to the array created from
+    /// this pointer will leak memory, as [`Drop`] is not ran
+    /// for any elements.
+    pub fn new(array: &'a mut ngx_array_t) -> Self {
         Self {
             array,
             _phantom: Default::default(),
@@ -43,7 +50,7 @@ impl<'a, T> NgxArray<'a, T> {
     }
 }
 
-impl<'a, T> core::ops::Deref for NgxArray<'a, T> {
+impl<'a, T> core::ops::Deref for Array<'a, T> {
     type Target = [T];
 
     fn deref(&self) -> &Self::Target {
@@ -59,7 +66,7 @@ impl<'a, T> core::ops::Deref for NgxArray<'a, T> {
     }
 }
 
-impl<'a, T> core::ops::DerefMut for NgxArray<'a, T> {
+impl<'a, T> core::ops::DerefMut for Array<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         // SAFETY: `self.array` is a valid pointer.
         let array = unsafe { *self.array };

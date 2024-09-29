@@ -68,7 +68,7 @@ impl CoreMainConf<'_> {
         let phases = unsafe { &mut (*self.conf.as_ptr()).phases };
         let phases = &mut phases[phase as usize].handlers;
 
-        NgxArray::new(phases).push(handler)
+        Array::new(phases).push(handler)
     }
 }
 
