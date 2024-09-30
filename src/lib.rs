@@ -102,6 +102,16 @@ macro_rules! ngx_modules {
     };
 }
 
+#[macro_export]
+macro_rules! commands {
+    ($($command:expr),*$(,)?) => {
+        [$(
+            $crate::http::CommandBuilder::build(&$command),
+        )*
+        $crate::ngx_null_command!()]
+    }
+}
+
 /// Count number of arguments
 #[macro_export]
 macro_rules! count {

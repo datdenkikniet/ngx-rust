@@ -4,8 +4,8 @@ use ngx::ffi::{
     ngx_str_t, ngx_uint_t, NGX_CONF_TAKE1, NGX_HTTP_LOC_CONF, NGX_HTTP_MODULE, NGX_RS_MODULE_SIGNATURE,
 };
 use ngx::http::{CommandBuilder, MergeConfigError};
+use ngx::{commands, http_request_handler, module_context, ngx_log_debug_http};
 use ngx::{core, core::Status, http};
-use ngx::{http_request_handler, module_context, ngx_log_debug_http, ngx_null_command};
 use std::os::raw::{c_char, c_void};
 use std::ptr::addr_of;
 
@@ -38,13 +38,11 @@ struct ModuleConfig {
 
 #[no_mangle]
 #[allow(non_upper_case_globals)]
-static mut ngx_http_curl_commands: [ngx_command_t; 2] = [
+static mut ngx_http_curl_commands: [ngx_command_t; 2] = commands! {
     CommandBuilder::new(c"curl", http::ConfOffset::Loc)
         .ty(NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1)
-        .set(ngx_http_curl_commands_set_enable)
-        .build(),
-    ngx_null_command!(),
-];
+        .set(ngx_http_curl_commands_set_enable),
+};
 
 #[no_mangle]
 #[allow(non_upper_case_globals)]
@@ -68,7 +66,7 @@ pub static mut ngx_http_curl_module: ngx_module_t = ngx_module_t {
     signature: NGX_RS_MODULE_SIGNATURE.as_ptr() as *const c_char,
 
     ctx: &ngx_http_curl_module_ctx as *const _ as *mut _,
-    commands: unsafe { &ngx_http_curl_commands[0] as *const _ as *mut _ },
+    commands: unsafe { addr_of!(ngx_http_curl_commands) as _ },
     type_: NGX_HTTP_MODULE as ngx_uint_t,
 
     init_master: None,

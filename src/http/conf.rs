@@ -68,6 +68,7 @@ pub struct CommandBuilder {
     set: Option<unsafe extern "C" fn(*mut ngx_conf_s, *mut ngx_command_s, *mut c_void) -> *mut i8>,
     ty: u32,
     conf_offset: ConfOffset,
+    offset: usize,
 }
 
 impl CommandBuilder {
@@ -78,6 +79,7 @@ impl CommandBuilder {
             set: None,
             ty: 0,
             conf_offset,
+            offset: 0,
         }
     }
 
@@ -116,7 +118,7 @@ impl CommandBuilder {
             type_: self.ty as _,
             set: self.set,
             conf: self.conf_offset.into_conf_offset(),
-            offset: 0,
+            offset: self.offset,
             post,
         }
     }
