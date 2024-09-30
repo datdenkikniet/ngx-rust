@@ -56,8 +56,24 @@ pub mod http;
 /// This module provides an interface into the NGINX logger framework.
 pub mod log;
 
+use nginx_sys::ngx_str_t;
 /// Re-export paste module for macros.
 pub use paste;
+
+#[macro_export]
+macro_rules! http_module {
+    ($module:ty, $([$command:expr, $handler:ident]),*) => {
+        $crate::paste::paste! {
+            #[no_mangle]
+            #[allow(non_upper_case_globals)]
+            static [<__module_ctx_ $module>]: ngx_http_module_t = $crate::module_context!($module);
+
+            #[no_mangle]
+            #[allow(non_upper_case_globals)]
+            static mut [<__module_commands_ $module>]: [ngx_command_t; $crate::count!($($command,)*) + 1] = $crate::commands!($($command,)*);
+        }
+    };
+}
 
 /// Define the module context.
 #[macro_export]
@@ -105,14 +121,69 @@ macro_rules! ngx_modules {
     };
 }
 
+pub fn set_no_op<T>(_cf: &mut T, _args: &[ngx_str_t]) -> Result<(), ()> {
+    Ok(())
+}
+
 #[macro_export]
-macro_rules! commands {
-    ($($command:expr),*$(,)?) => {
-        [$(
-            $crate::http::CommandBuilder::build(&$command),
-        )*
-        $crate::ngx_null_command!()]
-    }
+macro_rules! command {
+    ($module:ty, $conf:tt, $builder:expr) => {{
+        type ConfType = <$module as $crate::http::SafeHttpModule>::$conf;
+
+        const BUILDER: CommandBuilder<ConfType> = $builder;
+
+        $crate::paste::paste! {
+            #[allow(non_snake_case)]
+            unsafe extern "C" fn [<__raw_c_handler_ $conf>](
+                cf: *mut ngx_conf_t,
+                _cmd: *mut ngx_command_t,
+                conf: *mut c_void,
+            ) -> *mut c_char {
+                const HANDLER: fn(&mut ConfType, &[ngx_str_t]) -> Result<(), ()> =
+                    if let Some(handler) = BUILDER.handler() {
+                        handler
+                    } else {
+                        $crate::set_no_op
+                    };
+
+                let conf = unsafe { (conf as *mut ConfType).as_mut() }.unwrap();
+                let args = unsafe { Array::<ngx_str_t>::new_raw((*cf).args) }.unwrap();
+                let args = &args[1..];
+
+                let output: Result<(), ()> = HANDLER(conf, args);
+
+                if output.is_ok() {
+                    $crate::core::NGX_CONF_OK as _
+                } else {
+                    $crate::core::NGX_CONF_ERROR as _
+                }
+            }
+        }
+
+        let mut built = BUILDER.build_partial();
+
+        $crate::paste::paste! {
+            if BUILDER.handler().is_some() {
+                built.set = Some([<__raw_c_handler_ $conf>]);
+            }
+        }
+
+        built.conf = $crate::command!(offset: $conf).into_conf_offset();
+
+        built
+    }};
+
+    (offset: MainConf) => {
+        $crate::http::ConfOffset::Main
+    };
+
+    (offset: LocConf) => {
+        $crate::http::ConfOffset::Loc
+    };
+
+    (offset: SrvConf) => {
+        $crate::http::ConfOffset::Srv
+    };
 }
 
 /// Count number of arguments

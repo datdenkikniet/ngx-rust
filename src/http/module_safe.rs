@@ -10,7 +10,7 @@ use nginx_sys::*;
 
 use crate::core::*;
 
-use super::{HTTPModule, Merge, MergeConfigError};
+use super::{CommandBuilder, HTTPModule, Merge, MergeConfigError};
 
 pub struct Config<'a> {
     inner: NonNull<ngx_conf_t>,
@@ -66,7 +66,7 @@ impl CoreMainConf<'_> {
         handler: extern "C" fn(*mut ngx_http_request_t) -> ngx_int_t,
     ) -> Result<(), ()> {
         let phases = unsafe { &mut (*self.conf.as_ptr()).phases };
-        let phases = &mut phases[phase as usize].handlers;
+        let phases = &mut phases[phase.to_phase() as usize].handlers;
 
         Array::new(phases).push(handler)
     }
@@ -87,9 +87,9 @@ pub enum Phase {
     Log,
 }
 
-impl From<Phase> for ngx_http_phases {
-    fn from(value: Phase) -> Self {
-        match value {
+impl Phase {
+    fn to_phase(&self) -> ngx_http_phases {
+        match self {
             Phase::PostRead => ngx_http_phases_NGX_HTTP_POST_READ_PHASE,
             Phase::ServerRewrite => ngx_http_phases_NGX_HTTP_SERVER_REWRITE_PHASE,
             Phase::FindConfig => ngx_http_phases_NGX_HTTP_FIND_CONFIG_PHASE,

@@ -17,6 +17,7 @@ impl<'a, T> Array<'a, T> {
     /// If `T` has drop logic, pushing to the array created from
     /// this pointer will leak memory, as [`Drop`] is not ran
     /// for any elements.
+    ///
     /// # SAFETY
     /// The lifetime `'a` of `Self` must not outlive the lifetime
     /// of the passed-in pointer.

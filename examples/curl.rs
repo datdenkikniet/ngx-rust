@@ -4,14 +4,10 @@ use ngx::ffi::{
     ngx_str_t, ngx_uint_t, NGX_CONF_TAKE1, NGX_HTTP_LOC_CONF, NGX_HTTP_MODULE, NGX_RS_MODULE_SIGNATURE,
 };
 use ngx::http::{CommandBuilder, MergeConfigError};
-use ngx::{commands, http_request_handler, module_context, ngx_log_debug_http};
 use ngx::{core, core::Status, http};
+use ngx::{http_request_handler, module_context, ngx_log_debug_http, ngx_null_command};
 use std::os::raw::{c_char, c_void};
 use std::ptr::addr_of;
-
-unsafe fn args<'a>(conf: *mut ngx_conf_t) -> Option<Array<'a, ngx_str_t>> {
-    Array::new_raw((*conf).args)
-}
 
 struct Module;
 
@@ -36,22 +32,26 @@ struct ModuleConfig {
     enable: bool,
 }
 
-#[no_mangle]
-#[allow(non_upper_case_globals)]
-static mut ngx_http_curl_commands: [ngx_command_t; 2] = commands! {
-    CommandBuilder::new(c"curl", http::ConfOffset::Loc)
+const COMMAND: ngx_command_t = ngx::command!(
+    Module,
+    LocConf,
+    CommandBuilder::new(c"curl")
         .ty(NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1)
-        .set(ngx_http_curl_commands_set_enable),
-};
+        .set(ngx_http_curl_commands_set_enable)
+);
 
 #[no_mangle]
 #[allow(non_upper_case_globals)]
-static ngx_http_curl_module_ctx: ngx_http_module_t = module_context!(Module);
+static mut ngx_http_curl_commands: [ngx_command_t; 2] = [COMMAND, ngx_null_command!()];
 
 // Generate the `ngx_modules` table with exported modules.
 // This feature is required to build a 'cdylib' dynamic module outside of the NGINX buildsystem.
 #[cfg(feature = "export-modules")]
 ngx::ngx_modules!(ngx_http_curl_module);
+
+#[no_mangle]
+#[allow(non_upper_case_globals)]
+static ngx_http_curl_module_ctx: ngx_http_module_t = module_context!(Module);
 
 #[no_mangle]
 #[used]
@@ -118,15 +118,8 @@ http_request_handler!(curl_access_handler, |request: &mut http::Request| {
 });
 
 #[no_mangle]
-extern "C" fn ngx_http_curl_commands_set_enable(
-    cf: *mut ngx_conf_t,
-    _cmd: *mut ngx_command_t,
-    conf: *mut c_void,
-) -> *mut c_char {
-    let conf: &mut _ = unsafe { (conf as *mut ModuleConfig).as_mut() }.unwrap();
-    let args = unsafe { args(cf) }.unwrap();
-
-    let val = args[1].to_str();
+fn ngx_http_curl_commands_set_enable(conf: &mut ModuleConfig, args: &[ngx_str_t]) -> Result<(), ()> {
+    let val = args[0].to_str();
 
     // set default value optionally
     conf.enable = false;
@@ -137,5 +130,5 @@ extern "C" fn ngx_http_curl_commands_set_enable(
         conf.enable = false;
     }
 
-    std::ptr::null_mut()
+    Ok(())
 }

@@ -4,23 +4,23 @@ use std::ffi::{c_void, CStr};
 
 use nginx_sys::*;
 
-pub struct CommandBuilder {
+type Set<T> = fn(&mut T, &[ngx_str_t]) -> Result<(), ()>;
+
+pub struct CommandBuilder<T> {
     name: &'static CStr,
     post: Option<*mut c_void>,
-    set: Option<unsafe extern "C" fn(*mut ngx_conf_s, *mut ngx_command_s, *mut c_void) -> *mut i8>,
+    set: Option<Set<T>>,
     ty: u32,
-    conf_offset: ConfOffset,
     offset: usize,
 }
 
-impl CommandBuilder {
-    pub const fn new(name: &'static CStr, conf_offset: ConfOffset) -> Self {
+impl<T> CommandBuilder<T> {
+    pub const fn new(name: &'static CStr) -> Self {
         Self {
             name,
             post: None,
             set: None,
             ty: 0,
-            conf_offset,
             offset: 0,
         }
     }
@@ -35,15 +35,12 @@ impl CommandBuilder {
         self
     }
 
-    pub const fn set(
-        mut self,
-        set: unsafe extern "C" fn(*mut ngx_conf_s, *mut ngx_command_s, *mut c_void) -> *mut i8,
-    ) -> Self {
+    pub const fn set(mut self, set: fn(&mut T, &[ngx_str_t]) -> Result<(), ()>) -> Self {
         self.set = Some(set);
         self
     }
 
-    pub const fn build(&self) -> ngx_command_t {
+    pub const fn build_partial(&self) -> ngx_command_t {
         let name = ngx_str_t {
             len: self.name.count_bytes(),
             data: self.name.as_ptr() as _,
@@ -58,17 +55,15 @@ impl CommandBuilder {
         ngx_command_t {
             name,
             type_: self.ty as _,
-            set: self.set,
-            conf: self.conf_offset.into_conf_offset(),
+            set: None,
+            conf: 0,
             offset: self.offset,
             post,
         }
     }
-}
 
-impl From<CommandBuilder> for ngx_command_t {
-    fn from(value: CommandBuilder) -> Self {
-        value.build()
+    pub const fn handler(&self) -> Option<Set<T>> {
+        self.set
     }
 }
 
@@ -80,7 +75,7 @@ pub enum ConfOffset {
 }
 
 impl ConfOffset {
-    const fn into_conf_offset(&self) -> usize {
+    pub const fn into_conf_offset(&self) -> usize {
         match self {
             ConfOffset::Main => NGX_RS_HTTP_MAIN_CONF_OFFSET,
             ConfOffset::Srv => NGX_RS_HTTP_SRV_CONF_OFFSET,
