@@ -56,6 +56,9 @@ pub mod http;
 /// This module provides an interface into the NGINX logger framework.
 pub mod log;
 
+/// Re-export paste module for macros.
+pub use paste;
+
 /// Define the module context.
 #[macro_export]
 macro_rules! module_context {

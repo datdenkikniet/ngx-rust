@@ -3,10 +3,10 @@ use ngx::core::Array;
 use ngx::ffi::{
     nginx_version, ngx_command_t, ngx_conf_t, ngx_http_module_t, ngx_http_request_t, ngx_int_t, ngx_module_t,
     ngx_str_t, ngx_uint_t, NGX_CONF_TAKE1, NGX_HTTP_LOC_CONF, NGX_HTTP_MODULE, NGX_HTTP_SRV_CONF,
-    NGX_RS_HTTP_LOC_CONF_OFFSET, NGX_RS_MODULE_SIGNATURE,
+    NGX_RS_MODULE_SIGNATURE,
 };
+use ngx::{commands, define_command, http_request_handler, module_context, ngx_log_debug_http};
 use ngx::{core, core::Status, http::*};
-use ngx::{http_request_handler, module_context, ngx_log_debug_http, ngx_null_command, ngx_string};
 use std::os::raw::{c_char, c_void};
 use std::ptr::addr_of;
 
@@ -43,49 +43,23 @@ struct ModuleConfig {
 
 #[no_mangle]
 #[allow(non_upper_case_globals)]
-static mut ngx_http_awssigv4_commands: [ngx_command_t; 6] = [
-    ngx_command_t {
-        name: ngx_string!("awssigv4"),
-        type_: (NGX_HTTP_LOC_CONF | NGX_HTTP_SRV_CONF | NGX_CONF_TAKE1) as ngx_uint_t,
-        set: Some(ngx_http_awssigv4_commands_set_enable),
-        conf: NGX_RS_HTTP_LOC_CONF_OFFSET,
-        offset: 0,
-        post: std::ptr::null_mut(),
-    },
-    ngx_command_t {
-        name: ngx_string!("awssigv4_access_key"),
-        type_: (NGX_HTTP_LOC_CONF | NGX_HTTP_SRV_CONF | NGX_CONF_TAKE1) as ngx_uint_t,
-        set: Some(ngx_http_awssigv4_commands_set_access_key),
-        conf: NGX_RS_HTTP_LOC_CONF_OFFSET,
-        offset: 0,
-        post: std::ptr::null_mut(),
-    },
-    ngx_command_t {
-        name: ngx_string!("awssigv4_secret_key"),
-        type_: (NGX_HTTP_LOC_CONF | NGX_HTTP_SRV_CONF | NGX_CONF_TAKE1) as ngx_uint_t,
-        set: Some(ngx_http_awssigv4_commands_set_secret_key),
-        conf: NGX_RS_HTTP_LOC_CONF_OFFSET,
-        offset: 0,
-        post: std::ptr::null_mut(),
-    },
-    ngx_command_t {
-        name: ngx_string!("awssigv4_s3_bucket"),
-        type_: (NGX_HTTP_LOC_CONF | NGX_HTTP_SRV_CONF | NGX_CONF_TAKE1) as ngx_uint_t,
-        set: Some(ngx_http_awssigv4_commands_set_s3_bucket),
-        conf: NGX_RS_HTTP_LOC_CONF_OFFSET,
-        offset: 0,
-        post: std::ptr::null_mut(),
-    },
-    ngx_command_t {
-        name: ngx_string!("awssigv4_s3_endpoint"),
-        type_: (NGX_HTTP_LOC_CONF | NGX_HTTP_SRV_CONF | NGX_CONF_TAKE1) as ngx_uint_t,
-        set: Some(ngx_http_awssigv4_commands_set_s3_endpoint),
-        conf: NGX_RS_HTTP_LOC_CONF_OFFSET,
-        offset: 0,
-        post: std::ptr::null_mut(),
-    },
-    ngx_null_command!(),
-];
+static mut ngx_http_awssigv4_commands: [ngx_command_t; 6] = commands! {
+    CommandBuilder::new(c"awssigv4", ConfOffset::Loc)
+        .set(ngx_http_awssigv4_commands_set_enable)
+        .ty(NGX_HTTP_LOC_CONF | NGX_HTTP_SRV_CONF | NGX_CONF_TAKE1),
+    CommandBuilder::new(c"awssigv4_access_key", ConfOffset::Loc)
+        .set(ngx_http_awssigv4_commands_set_access_key)
+        .ty(NGX_HTTP_LOC_CONF | NGX_HTTP_SRV_CONF | NGX_CONF_TAKE1),
+    CommandBuilder::new(c"awssigv4_secret_key", ConfOffset::Loc)
+        .set(ngx_http_awssigv4_commands_set_secret_key)
+        .ty(NGX_HTTP_LOC_CONF | NGX_HTTP_SRV_CONF | NGX_CONF_TAKE1),
+    CommandBuilder::new(c"awssigv4_s3_bucket", ConfOffset::Loc)
+        .set(ngx_http_awssigv4_commands_set_s3_bucket)
+        .ty(NGX_HTTP_LOC_CONF | NGX_HTTP_SRV_CONF | NGX_CONF_TAKE1),
+    CommandBuilder::new(c"awssigv4_s3_endpoint", ConfOffset::Loc)
+        .set(ngx_http_awssigv4_commands_set_s3_endpoint)
+        .ty(NGX_HTTP_LOC_CONF | NGX_HTTP_SRV_CONF | NGX_CONF_TAKE1),
+};
 
 #[no_mangle]
 #[allow(non_upper_case_globals)]
@@ -205,6 +179,7 @@ extern "C" fn ngx_http_awssigv4_commands_set_access_key(
 ) -> *mut c_char {
     let conf = unsafe { (conf as *mut ModuleConfig).as_mut() }.unwrap();
     let args = unsafe { args(cf) }.unwrap();
+
     conf.access_key = args[1].to_string();
 
     std::ptr::null_mut()
@@ -332,3 +307,9 @@ http_request_handler!(awssigv4_header_handler, |request: &mut Request| {
 
     core::Status::NGX_OK
 });
+
+fn module_test_set(conf: &mut ModuleConfig, args: &[ngx_str_t]) -> Result<(), ()> {
+    Ok(())
+}
+
+define_command!(ModuleConfig, module_test_set);

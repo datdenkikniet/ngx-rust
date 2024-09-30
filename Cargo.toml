@@ -20,6 +20,7 @@ keywords = ["nginx", "module", "sys"]
 
 [dependencies]
 nginx-sys = { path = "nginx-sys", version = "0.5.0"}
+paste = "1.0.15"
 
 [features]
 # Build our own copy of the NGINX by default.
