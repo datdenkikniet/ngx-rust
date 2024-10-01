@@ -1,10 +1,10 @@
 use ngx::ffi::{
-    nginx_version, ngx_command_t, ngx_http_module_t, ngx_http_request_t, ngx_int_t, ngx_module_t, ngx_str_t,
-    ngx_uint_t, NGX_CONF_TAKE1, NGX_HTTP_LOC_CONF, NGX_HTTP_MODULE, NGX_RS_MODULE_SIGNATURE,
+    ngx_command_t, ngx_http_module_t, ngx_http_request_t, ngx_int_t, ngx_module_t, ngx_str_t, NGX_CONF_TAKE1,
+    NGX_HTTP_LOC_CONF,
 };
 use ngx::http::{CommandBuilder, MergeConfigError};
 use ngx::{core, core::Status, http};
-use ngx::{http_request_handler, module_context, ngx_log_debug_http};
+use ngx::{http_request_handler, ngx_log_debug_http};
 use std::os::raw::c_char;
 use std::ptr::addr_of;
 
@@ -14,10 +14,6 @@ impl http::SafeHttpModule for Module {
     type MainConf = ();
     type SrvConf = ();
     type LocConf = ModuleConfig;
-
-    fn module() -> *const ngx_module_t {
-        unsafe { addr_of!(ngx_http_curl_module) }
-    }
 
     fn postconfiguration(mut cf: http::Config) -> Result<(), http::Error> {
         let mut cmcf = cf.core_main_conf();
@@ -31,60 +27,6 @@ struct ModuleConfig {
     enable: bool,
 }
 
-const COMMAND: ngx_command_t = ngx::command!(
-    Module::LocConf,
-    CommandBuilder::new(c"curl")
-        .ty(NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1)
-        .set(ngx_http_curl_commands_set_enable)
-);
-
-#[no_mangle]
-#[allow(non_upper_case_globals)]
-static mut ngx_http_curl_commands: [ngx_command_t; 2] = ngx::commands!(COMMAND);
-
-// Generate the `ngx_modules` table with exported modules.
-// This feature is required to build a 'cdylib' dynamic module outside of the NGINX buildsystem.
-#[cfg(feature = "export-modules")]
-ngx::ngx_modules!(ngx_http_curl_module);
-
-#[no_mangle]
-#[allow(non_upper_case_globals)]
-static ngx_http_curl_module_ctx: ngx_http_module_t = module_context!(Module);
-
-#[no_mangle]
-#[used]
-#[allow(non_upper_case_globals)]
-pub static mut ngx_http_curl_module: ngx_module_t = ngx_module_t {
-    ctx_index: ngx_uint_t::MAX,
-    index: ngx_uint_t::MAX,
-    name: std::ptr::null_mut(),
-    spare0: 0,
-    spare1: 0,
-    version: nginx_version as ngx_uint_t,
-    signature: NGX_RS_MODULE_SIGNATURE.as_ptr() as *const c_char,
-
-    ctx: &ngx_http_curl_module_ctx as *const _ as *mut _,
-    commands: unsafe { addr_of!(ngx_http_curl_commands) as _ },
-    type_: NGX_HTTP_MODULE as ngx_uint_t,
-
-    init_master: None,
-    init_module: None,
-    init_process: None,
-    init_thread: None,
-    exit_thread: None,
-    exit_process: None,
-    exit_master: None,
-
-    spare_hook0: 0,
-    spare_hook1: 0,
-    spare_hook2: 0,
-    spare_hook3: 0,
-    spare_hook4: 0,
-    spare_hook5: 0,
-    spare_hook6: 0,
-    spare_hook7: 0,
-};
-
 impl http::Merge for ModuleConfig {
     fn merge(&mut self, prev: &ModuleConfig) -> Result<(), MergeConfigError> {
         if prev.enable {
@@ -95,7 +37,7 @@ impl http::Merge for ModuleConfig {
 }
 
 http_request_handler!(curl_access_handler, |request: &mut http::Request| {
-    let co = unsafe { request.get_module_loc_conf::<ModuleConfig>(&*addr_of!(ngx_http_curl_module)) };
+    let co = unsafe { request.get_module_loc_conf::<ModuleConfig>(&*addr_of!(NGX_HTTP_CURL_MODULE)) };
     let co = co.expect("module config is none");
 
     ngx_log_debug_http!(request, "curl module enabled: {}", co.enable);
@@ -115,7 +57,6 @@ http_request_handler!(curl_access_handler, |request: &mut http::Request| {
     }
 });
 
-#[no_mangle]
 fn ngx_http_curl_commands_set_enable(args: &[ngx_str_t], conf: &mut ModuleConfig) -> Result<(), ()> {
     let val = args[0].as_str();
 
@@ -130,3 +71,17 @@ fn ngx_http_curl_commands_set_enable(args: &[ngx_str_t], conf: &mut ModuleConfig
 
     Ok(())
 }
+
+const COMMAND: ngx_command_t = ngx::command!(
+    Module::LocConf,
+    CommandBuilder::new(c"curl")
+        .ty(NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1)
+        .set(ngx_http_curl_commands_set_enable)
+);
+
+pub static mut NGX_HTTP_CURL_MODULE: ngx_module_t = ngx::define_http_module!(Module, [COMMAND]);
+
+// Generate the `ngx_modules` table with exported modules.
+// This feature is required to build a 'cdylib' dynamic module outside of the NGINX buildsystem.
+#[cfg(feature = "export-modules")]
+ngx::ngx_modules!(NGX_HTTP_CURL_MODULE);

@@ -125,6 +125,12 @@ impl From<Error> for Status {
     }
 }
 
+pub trait ModuleDefinition {
+    /// Get a pointer to the NGINX-initialized [`ngx_module_t`] that defines this
+    /// module.
+    fn module() -> *const ngx_module_t;
+}
+
 pub trait SafeHttpModule {
     /// Configuration in the `http` block.
     type MainConf: Merge + Default;
@@ -132,10 +138,6 @@ pub trait SafeHttpModule {
     type SrvConf: Merge + Default;
     /// Configuration in a `location` block within the `http` block.
     type LocConf: Merge + Default;
-
-    /// Get a pointer to the NGINX-initialized [`ngx_module_t`] that defines this
-    /// module.
-    fn module() -> *const ngx_module_t;
 
     fn preconfiguration(_cf: Config) -> Result<(), Error> {
         Ok(())
@@ -172,7 +174,7 @@ pub trait SafeHttpModule {
 
 impl<T> HTTPModule for T
 where
-    T: SafeHttpModule,
+    T: SafeHttpModule + ModuleDefinition,
 {
     type MainConf = <Self as SafeHttpModule>::MainConf;
 
@@ -181,7 +183,7 @@ where
     type LocConf = <Self as SafeHttpModule>::LocConf;
 
     unsafe extern "C" fn preconfiguration(cf: *mut ngx_conf_t) -> ngx_int_t {
-        let cf = if let Some(cf) = Config::new(cf, <Self as SafeHttpModule>::module()) {
+        let cf = if let Some(cf) = Config::new(cf, <Self as ModuleDefinition>::module()) {
             cf
         } else {
             return Status::NGX_ERROR.into();
@@ -196,7 +198,7 @@ where
     }
 
     unsafe extern "C" fn postconfiguration(cf: *mut ngx_conf_t) -> ngx_int_t {
-        let cf = if let Some(cf) = Config::new(cf, <Self as SafeHttpModule>::module()) {
+        let cf = if let Some(cf) = Config::new(cf, <Self as ModuleDefinition>::module()) {
             cf
         } else {
             return Status::NGX_ERROR.into();
@@ -211,7 +213,7 @@ where
     }
 
     unsafe extern "C" fn create_main_conf(cf: *mut ngx_conf_t) -> *mut c_void {
-        let cf = if let Some(cf) = Config::new(cf, <Self as SafeHttpModule>::module()) {
+        let cf = if let Some(cf) = Config::new(cf, <Self as ModuleDefinition>::module()) {
             cf
         } else {
             return std::ptr::null_mut() as _;
@@ -223,7 +225,7 @@ where
     }
 
     unsafe extern "C" fn init_main_conf(cf: *mut ngx_conf_t, conf: *mut c_void) -> *mut c_char {
-        let cf = if let Some(cf) = Config::new(cf, <Self as SafeHttpModule>::module()) {
+        let cf = if let Some(cf) = Config::new(cf, <Self as ModuleDefinition>::module()) {
             cf
         } else {
             return NGX_CONF_ERROR as _;
@@ -242,7 +244,7 @@ where
     }
 
     unsafe extern "C" fn create_srv_conf(cf: *mut ngx_conf_t) -> *mut c_void {
-        let cf = if let Some(cf) = Config::new(cf, <Self as SafeHttpModule>::module()) {
+        let cf = if let Some(cf) = Config::new(cf, <Self as ModuleDefinition>::module()) {
             cf
         } else {
             return std::ptr::null_mut() as _;
@@ -254,7 +256,7 @@ where
     }
 
     unsafe extern "C" fn merge_srv_conf(cf: *mut ngx_conf_t, prev: *mut c_void, conf: *mut c_void) -> *mut c_char {
-        let cf = if let Some(cf) = Config::new(cf, <Self as SafeHttpModule>::module()) {
+        let cf = if let Some(cf) = Config::new(cf, <Self as ModuleDefinition>::module()) {
             cf
         } else {
             return NGX_CONF_ERROR as _;
@@ -279,7 +281,7 @@ where
     }
 
     unsafe extern "C" fn create_loc_conf(cf: *mut ngx_conf_t) -> *mut c_void {
-        let cf = if let Some(cf) = Config::new(cf, <Self as SafeHttpModule>::module()) {
+        let cf = if let Some(cf) = Config::new(cf, <Self as ModuleDefinition>::module()) {
             cf
         } else {
             return std::ptr::null_mut() as _;
@@ -291,7 +293,7 @@ where
     }
 
     unsafe extern "C" fn merge_loc_conf(cf: *mut ngx_conf_t, prev: *mut c_void, conf: *mut c_void) -> *mut c_char {
-        let cf = if let Some(cf) = Config::new(cf, <Self as SafeHttpModule>::module()) {
+        let cf = if let Some(cf) = Config::new(cf, <Self as ModuleDefinition>::module()) {
             cf
         } else {
             return NGX_CONF_ERROR as _;
