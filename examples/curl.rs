@@ -1,12 +1,11 @@
-use ngx::core::Array;
 use ngx::ffi::{
-    nginx_version, ngx_command_t, ngx_conf_t, ngx_http_module_t, ngx_http_request_t, ngx_int_t, ngx_module_t,
-    ngx_str_t, ngx_uint_t, NGX_CONF_TAKE1, NGX_HTTP_LOC_CONF, NGX_HTTP_MODULE, NGX_RS_MODULE_SIGNATURE,
+    nginx_version, ngx_command_t, ngx_http_module_t, ngx_http_request_t, ngx_int_t, ngx_module_t, ngx_str_t,
+    ngx_uint_t, NGX_CONF_TAKE1, NGX_HTTP_LOC_CONF, NGX_HTTP_MODULE, NGX_RS_MODULE_SIGNATURE,
 };
 use ngx::http::{CommandBuilder, MergeConfigError};
 use ngx::{core, core::Status, http};
-use ngx::{http_request_handler, module_context, ngx_log_debug_http, ngx_null_command};
-use std::os::raw::{c_char, c_void};
+use ngx::{http_request_handler, module_context, ngx_log_debug_http};
+use std::os::raw::c_char;
 use std::ptr::addr_of;
 
 struct Module;
@@ -33,8 +32,7 @@ struct ModuleConfig {
 }
 
 const COMMAND: ngx_command_t = ngx::command!(
-    Module,
-    LocConf,
+    Module::LocConf,
     CommandBuilder::new(c"curl")
         .ty(NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1)
         .set(ngx_http_curl_commands_set_enable)
@@ -42,7 +40,7 @@ const COMMAND: ngx_command_t = ngx::command!(
 
 #[no_mangle]
 #[allow(non_upper_case_globals)]
-static mut ngx_http_curl_commands: [ngx_command_t; 2] = [COMMAND, ngx_null_command!()];
+static mut ngx_http_curl_commands: [ngx_command_t; 2] = ngx::commands!(COMMAND);
 
 // Generate the `ngx_modules` table with exported modules.
 // This feature is required to build a 'cdylib' dynamic module outside of the NGINX buildsystem.
@@ -118,8 +116,8 @@ http_request_handler!(curl_access_handler, |request: &mut http::Request| {
 });
 
 #[no_mangle]
-fn ngx_http_curl_commands_set_enable(conf: &mut ModuleConfig, args: &[ngx_str_t]) -> Result<(), ()> {
-    let val = args[0].to_str();
+fn ngx_http_curl_commands_set_enable(args: &[ngx_str_t], conf: &mut ModuleConfig) -> Result<(), ()> {
+    let val = args[0].as_str();
 
     // set default value optionally
     conf.enable = false;

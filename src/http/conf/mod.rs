@@ -3,6 +3,7 @@ use crate::ffi::*;
 use std::os::raw::c_void;
 
 mod command;
+mod macros;
 
 pub use command::*;
 

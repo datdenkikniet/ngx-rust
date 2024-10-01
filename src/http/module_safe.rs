@@ -10,7 +10,7 @@ use nginx_sys::*;
 
 use crate::core::*;
 
-use super::{CommandBuilder, HTTPModule, Merge, MergeConfigError};
+use super::{HTTPModule, Merge, MergeConfigError};
 
 pub struct Config<'a> {
     inner: NonNull<ngx_conf_t>,

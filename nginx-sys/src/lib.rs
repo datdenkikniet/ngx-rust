@@ -77,13 +77,9 @@ pub unsafe fn str_to_uchar(pool: *mut ngx_pool_t, data: &str) -> *mut u_char {
 impl ngx_str_t {
     /// Convert the nginx string to a string slice (`&str`).
     ///
-    /// # Safety
-    /// This function is marked as unsafe because it involves raw pointer manipulation.
-    /// It assumes that the underlying `data` pointer is valid and points to a valid UTF-8 encoded string.
-    ///
     /// # Returns
     /// A string slice (`&str`) representing the nginx string.
-    pub fn to_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         unsafe {
             let slice = slice::from_raw_parts(self.data, self.len);
             return std::str::from_utf8(slice).unwrap();

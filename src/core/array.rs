@@ -12,7 +12,7 @@ pub struct Array<'a, T> {
 }
 
 impl<'a, T> Array<'a, T> {
-    /// Create a new [`NgxArray`] from a raw pointer.
+    /// Create a new [`Array`] from a raw pointer.
     ///
     /// If `T` has drop logic, pushing to the array created from
     /// this pointer will leak memory, as [`Drop`] is not ran

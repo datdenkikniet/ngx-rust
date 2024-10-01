@@ -4,7 +4,7 @@ use std::ffi::{c_void, CStr};
 
 use nginx_sys::*;
 
-type Set<T> = fn(&mut T, &[ngx_str_t]) -> Result<(), ()>;
+type Set<T> = fn(&[ngx_str_t], &mut T) -> Result<(), ()>;
 
 pub struct CommandBuilder<T> {
     name: &'static CStr,
@@ -35,7 +35,7 @@ impl<T> CommandBuilder<T> {
         self
     }
 
-    pub const fn set(mut self, set: fn(&mut T, &[ngx_str_t]) -> Result<(), ()>) -> Self {
+    pub const fn set(mut self, set: Set<T>) -> Self {
         self.set = Some(set);
         self
     }
@@ -82,31 +82,4 @@ impl ConfOffset {
             ConfOffset::Loc => NGX_RS_HTTP_LOC_CONF_OFFSET,
         }
     }
-}
-
-#[macro_export]
-macro_rules! define_command {
-    ($conf_type:ty, $handler:ident) => {
-        $crate::paste::paste! {
-            #[no_mangle]
-            extern "C" fn [<__raw_c_handler_ $handler>](
-                cf: *mut ngx_conf_t,
-                _cmd: *mut ngx_command_t,
-                conf: *mut c_void,
-            ) -> *mut c_char {
-                let conf = unsafe { (conf as *mut $conf_type).as_mut() }.unwrap();
-                let args = unsafe { Array::<ngx_str_t>::new_raw((*cf).args) }.unwrap();
-                let args = &args[1..];
-
-                let the_fn: fn(&mut $conf_type, &[ngx_str_t]) -> Result<(), ()> = $handler;
-                let output: Result<(), ()> = the_fn(conf, args);
-
-                if output.is_ok() {
-                    $crate::core::NGX_CONF_OK as _
-                } else {
-                    $crate::core::NGX_CONF_ERROR as _
-                }
-            }
-        }
-    };
 }
