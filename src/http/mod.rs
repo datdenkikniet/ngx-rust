@@ -22,7 +22,16 @@ macro_rules! define_http_module {
         }
 
         #[used]
-        static CTX: ngx_http_module_t = ngx::module_context!($module);
+        static CTX: ngx_http_module_t = $crate::ffi::ngx_http_module_t {
+            preconfiguration: Some(<$module as $crate::http::HTTPModule>::preconfiguration),
+            postconfiguration: Some(<$module as $crate::http::HTTPModule>::postconfiguration),
+            create_main_conf: Some(<$module as $crate::http::HTTPModule>::create_main_conf),
+            init_main_conf: Some(<$module as $crate::http::HTTPModule>::init_main_conf),
+            create_srv_conf: Some(<$module as $crate::http::HTTPModule>::create_srv_conf),
+            merge_srv_conf: Some(<$module as $crate::http::HTTPModule>::merge_srv_conf),
+            create_loc_conf: Some(<$module as $crate::http::HTTPModule>::create_loc_conf),
+            merge_loc_conf: Some(<$module as $crate::http::HTTPModule>::merge_loc_conf),
+        };
 
         #[used]
         static mut COMMANDS: [ngx_command_t; ngx::count!($($commands,)*) + 1] = ngx::commands!($($commands,)*);
