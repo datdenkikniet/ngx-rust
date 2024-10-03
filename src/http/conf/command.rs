@@ -6,7 +6,7 @@ use nginx_sys::*;
 
 type Set<T> = fn(&[ngx_str_t], &mut T) -> Result<(), ()>;
 
-pub struct CommandBuilder<T> {
+pub struct Command<T> {
     name: &'static CStr,
     post: Option<*mut c_void>,
     set: Option<Set<T>>,
@@ -14,7 +14,7 @@ pub struct CommandBuilder<T> {
     offset: usize,
 }
 
-impl<T> CommandBuilder<T> {
+impl<T> Command<T> {
     pub const fn new(name: &'static CStr) -> Self {
         Self {
             name,

@@ -44,19 +44,19 @@ struct ModuleConfig {
 #[no_mangle]
 #[allow(non_upper_case_globals)]
 static mut ngx_http_awssigv4_commands: [ngx_command_t; 6] = commands! {
-    CommandBuilder::new(c"awssigv4", ConfOffset::Loc)
+    Command::new(c"awssigv4", ConfOffset::Loc)
         .set(ngx_http_awssigv4_commands_set_enable)
         .ty(NGX_HTTP_LOC_CONF | NGX_HTTP_SRV_CONF | NGX_CONF_TAKE1),
-    CommandBuilder::new(c"awssigv4_access_key", ConfOffset::Loc)
+    Command::new(c"awssigv4_access_key", ConfOffset::Loc)
         .set(ngx_http_awssigv4_commands_set_access_key)
         .ty(NGX_HTTP_LOC_CONF | NGX_HTTP_SRV_CONF | NGX_CONF_TAKE1),
-    CommandBuilder::new(c"awssigv4_secret_key", ConfOffset::Loc)
+    Command::new(c"awssigv4_secret_key", ConfOffset::Loc)
         .set(ngx_http_awssigv4_commands_set_secret_key)
         .ty(NGX_HTTP_LOC_CONF | NGX_HTTP_SRV_CONF | NGX_CONF_TAKE1),
-    CommandBuilder::new(c"awssigv4_s3_bucket", ConfOffset::Loc)
+    Command::new(c"awssigv4_s3_bucket", ConfOffset::Loc)
         .set(ngx_http_awssigv4_commands_set_s3_bucket)
         .ty(NGX_HTTP_LOC_CONF | NGX_HTTP_SRV_CONF | NGX_CONF_TAKE1),
-    CommandBuilder::new(c"awssigv4_s3_endpoint", ConfOffset::Loc)
+    Command::new(c"awssigv4_s3_endpoint", ConfOffset::Loc)
         .set(ngx_http_awssigv4_commands_set_s3_endpoint)
         .ty(NGX_HTTP_LOC_CONF | NGX_HTTP_SRV_CONF | NGX_CONF_TAKE1),
 };

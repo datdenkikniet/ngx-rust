@@ -4,7 +4,7 @@
 /// # Basic example
 ///
 /// ```rust
-/// # use ngx::http::{SafeHttpModule, CommandBuilder, MergeConfigError};
+/// # use ngx::http::{SafeHttpModule, Command, MergeConfigError};
 /// # use ngx::ffi::{ngx_str_t, NGX_HTTP_LOC_CONF, NGX_CONF_TAKE1};
 /// struct Module;
 ///
@@ -32,7 +32,7 @@
 ///
 /// const MY_COMMAND: ngx::ffi::ngx_command_t = ngx::command!(
 ///     Module::LocConf,
-///     CommandBuilder::new(c"set_value")
+///     Command::new(c"set_value")
 ///         .ty(NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1)
 ///         .set(set_loc_conf)
 /// );
@@ -44,9 +44,9 @@
 /// // A type implementing `SafeHttpModule`
 /// type Module;
 ///
-/// ngx::command!(Module::MainConf, /* expr: CommandBuilder::<Module::MainConf> */);
-/// ngx::command!(Module::SrvConf, /* expr: CommandBuilder::<Module::SrvConf> */);
-/// ngx::command!(Module::LocConf, /* expr: CommandBuilder::<Module::LocConf> */);
+/// ngx::command!(Module::MainConf, /* expr: Command::<Module::MainConf> */);
+/// ngx::command!(Module::SrvConf, /* expr: Command::<Module::SrvConf> */);
+/// ngx::command!(Module::LocConf, /* expr: Command::<Module::LocConf> */);
 /// ```
 #[macro_export]
 macro_rules! command {
@@ -57,7 +57,7 @@ macro_rules! command {
 
         type ConfType = <$module as $crate::http::SafeHttpModule>::$conf;
 
-        const BUILDER: CommandBuilder<ConfType> = $builder;
+        const BUILDER: Command<ConfType> = $builder;
 
         #[allow(non_snake_case)]
         unsafe extern "C" fn __raw_c_handler_(
