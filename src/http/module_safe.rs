@@ -128,7 +128,7 @@ impl From<Error> for Status {
 pub trait ModuleDefinition {
     /// Get a pointer to the NGINX-initialized [`ngx_module_t`] that defines this
     /// module.
-    fn module() -> *const ngx_module_t;
+    fn module() -> *mut ngx_module_t;
 }
 
 pub trait SafeHttpModule {

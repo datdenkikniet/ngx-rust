@@ -16,8 +16,8 @@ pub use status::*;
 macro_rules! define_http_module {
     ($module:ty, [$($commands:ident),*$(,)?]) => {{
         impl ngx::http::ModuleDefinition for $module {
-            fn module() -> *const ngx::ffi::ngx_module_t {
-                unsafe { addr_of!(MODULE) }
+            fn module() -> *mut ngx::ffi::ngx_module_t {
+                unsafe { std::ptr::addr_of_mut!(MODULE) }
             }
         }
 
