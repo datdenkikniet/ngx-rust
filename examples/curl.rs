@@ -1,8 +1,5 @@
-use ngx::ffi::{
-    ngx_command_t, ngx_http_module_t, ngx_http_request_t, ngx_int_t, ngx_module_t, ngx_str_t, NGX_CONF_TAKE1,
-    NGX_HTTP_LOC_CONF,
-};
-use ngx::http::{Command, MergeConfigError};
+use ngx::ffi::{ngx_command_t, ngx_http_module_t, ngx_http_request_t, ngx_int_t, ngx_module_t, ngx_str_t};
+use ngx::http::{ArgCount, Command, CommandContext, MergeConfigError};
 use ngx::{core, core::Status, http};
 use ngx::{http_request_handler, ngx_log_debug_http};
 use std::os::raw::c_char;
@@ -74,9 +71,7 @@ fn ngx_http_curl_commands_set_enable(args: &[ngx_str_t], conf: &mut ModuleConfig
 
 const COMMAND: ngx_command_t = ngx::command!(
     Module::LocConf,
-    Command::new(c"curl")
-        .ty(NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1)
-        .set(ngx_http_curl_commands_set_enable)
+    Command::new_count(c"curl", ArgCount::One, &[CommandContext::Loc]).set(ngx_http_curl_commands_set_enable)
 );
 
 pub static mut NGX_HTTP_CURL_MODULE: ngx_module_t = ngx::define_http_module!(Module, [COMMAND]);
