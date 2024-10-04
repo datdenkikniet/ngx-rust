@@ -37,20 +37,22 @@ http_request_handler!(curl_access_handler, |request: &mut http::Request| {
     let co = unsafe { request.get_module_loc_conf::<ModuleConfig>(&*addr_of!(NGX_HTTP_CURL_MODULE)) };
     let co = co.expect("module config is none");
 
+    println!("Thing: {:p}", co as *const _);
+    println!("Thing: {:?}", co);
+
     ngx_log_debug_http!(request, "curl module enabled: {}", co.enable);
 
-    match co.enable {
-        true => {
-            if request
-                .user_agent()
-                .is_some_and(|ua| ua.as_bytes().starts_with(b"curl"))
-            {
-                http::HTTPStatus::FORBIDDEN.into()
-            } else {
-                core::Status::NGX_DECLINED
-            }
+    if co.enable {
+        if request
+            .user_agent()
+            .is_some_and(|ua| ua.as_bytes().starts_with(b"curl"))
+        {
+            http::HTTPStatus::FORBIDDEN.into()
+        } else {
+            core::Status::NGX_DECLINED
         }
-        false => core::Status::NGX_DECLINED,
+    } else {
+        core::Status::NGX_DECLINED
     }
 });
 
