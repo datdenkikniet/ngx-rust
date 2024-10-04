@@ -1,6 +1,7 @@
 use crate::core::buffer::{Buffer, MemoryBuffer, TemporaryBuffer};
 use crate::ffi::*;
 
+use std::mem::MaybeUninit;
 use std::os::raw::c_void;
 use std::ptr::NonNull;
 use std::{mem, ptr};
@@ -9,6 +10,10 @@ use std::{mem, ptr};
 pub struct Pool(*mut ngx_pool_t);
 
 impl Pool {
+    fn alloc(&mut self, size: usize) -> *mut c_void {
+        unsafe { ngx_palloc(self.0, size) }
+    }
+
     /// Creates a new `Pool` from an `ngx_pool_t` pointer.
     ///
     /// # Safety
@@ -45,20 +50,27 @@ impl Pool {
     ///
     /// Returns `Some(MemoryBuffer)` if the buffer is successfully created, or `None` if allocation fails.
     pub fn create_buffer_from_static_str(&mut self, str: &'static str) -> Option<MemoryBuffer> {
-        let buf = self.calloc_type::<ngx_buf_t>();
-        let buf = NonNull::new(buf)?;
-
         // We cast away const, but buffers with the memory flag are read-only
         let start = str.as_ptr() as *mut u8;
         let end = unsafe { start.add(str.len()) };
 
-        unsafe {
-            (*buf.as_ptr()).start = start;
-            (*buf.as_ptr()).pos = start;
-            (*buf.as_ptr()).last = end;
-            (*buf.as_ptr()).end = end;
-            (*buf.as_ptr()).set_memory(1);
-        }
+        let buf = self.allocate(ngx_buf_t {
+            start,
+            pos: start,
+            last: end,
+            end,
+            file_pos: 0,
+            file_last: 0,
+            tag: ptr::null_mut(),
+            file: ptr::null_mut(),
+            shadow: ptr::null_mut(),
+            _bitfield_1: Default::default(),
+            _bitfield_align_1: Default::default(),
+            num: 0,
+        })?;
+
+        // SAFETY: buf is a non-null, aligned pointer of type ngx_buf_t.
+        unsafe { *buf.as_ptr() }.set_memory(1);
 
         Some(MemoryBuffer::from_ngx_buf(buf))
     }
@@ -69,61 +81,66 @@ impl Pool {
     ///
     /// # Safety
     /// This function is marked as unsafe because it involves raw pointer manipulation.
-    unsafe fn add_cleanup_for_value<T>(&mut self, value: *mut T) -> Result<(), ()> {
-        let cln = ngx_pool_cleanup_add(self.0, 0);
+    fn add_cleanup_for_value<T>(&mut self, value: NonNull<T>) -> Result<(), ()> {
+        let cln = unsafe { ngx_pool_cleanup_add(self.0, 0) };
         if cln.is_null() {
             return Err(());
         }
-        (*cln).handler = Some(cleanup_type::<T>);
-        (*cln).data = value as *mut c_void;
+
+        unsafe {
+            *cln = ngx_pool_cleanup_s {
+                handler: Some(cleanup_type::<T>),
+                data: value.as_ptr() as _,
+                next: ptr::null_mut() as _,
+            };
+        }
 
         Ok(())
     }
 
-    /// Allocates memory from the pool of the specified size.
+    /// Allocates memory for a value of a specified type and zeroes it. This does _not_ add a cleanup handler.
     ///
-    /// Returns a raw pointer to the allocated memory.
-    pub fn alloc(&mut self, size: usize) -> *mut c_void {
-        unsafe { ngx_palloc(self.0, size) }
-    }
+    /// Returns `Some` on success, else `None`.
+    ///
+    /// The pointer is valid as long as the pool backing this [`Pool`] exists.
+    pub fn allocate_uninit_zeroed<T>(&mut self) -> Option<NonNull<MaybeUninit<T>>> {
+        if std::mem::size_of::<T>() == 0 {
+            return Some(NonNull::dangling());
+        }
 
-    /// Allocates memory for a type from the pool.
-    ///
-    /// Returns a typed pointer to the allocated memory.
-    pub fn alloc_type<T: Copy>(&mut self) -> *mut T {
-        self.alloc(mem::size_of::<T>()) as *mut T
-    }
-
-    /// Allocates zeroed memory from the pool of the specified size.
-    ///
-    /// Returns a raw pointer to the allocated memory.
-    pub fn calloc(&mut self, size: usize) -> *mut c_void {
-        unsafe { ngx_pcalloc(self.0, size) }
-    }
-
-    /// Allocates zeroed memory for a type from the pool.
-    ///
-    /// Returns a typed pointer to the allocated memory.
-    pub fn calloc_type<T: Copy>(&mut self) -> *mut T {
-        self.calloc(mem::size_of::<T>()) as *mut T
+        let p = unsafe { ngx_pcalloc(self.0, mem::size_of::<T>()) } as *mut MaybeUninit<T>;
+        NonNull::new(p)
     }
 
     /// Allocates memory for a value of a specified type and adds a cleanup handler to the memory pool.
     ///
-    /// Returns a typed pointer to the allocated memory if successful, or a null pointer if allocation or cleanup handler addition fails.
+    /// Returns `Some` on success, else `None`.
     ///
-    /// # Safety
-    /// This function is marked as unsafe because it involves raw pointer manipulation.
-    pub fn allocate<T>(&mut self, value: T) -> *mut T {
-        unsafe {
-            let p = self.alloc(mem::size_of::<T>()) as *mut T;
-            ptr::write(p, value);
-            if self.add_cleanup_for_value(p).is_err() {
-                ptr::drop_in_place(p);
-                return ptr::null_mut();
-            };
-            p
+    /// The pointer is valid as long as the pool backing this [`Pool`] exists.
+    pub fn allocate<T>(&mut self, value: T) -> Option<NonNull<T>> {
+        if std::mem::size_of::<T>() == 0 {
+            return Some(NonNull::dangling());
         }
+
+        let p = self.alloc(mem::size_of::<T>()) as _;
+        let p = NonNull::new(p)?;
+
+        unsafe {
+            ptr::write(p.as_ptr(), value);
+            if self.add_cleanup_for_value(p).is_err() {
+                ptr::drop_in_place(p.as_ptr());
+                return None;
+            };
+        }
+
+        Some(p)
+    }
+
+    /// Allocate a memory region of size `len`.
+    ///
+    /// The pointer is valid as long as the pool backing this [`Pool`] exists.
+    pub fn allocate_raw(&mut self, len: usize) -> Option<NonNull<u8>> {
+        NonNull::new(self.alloc(len) as _)
     }
 }
 

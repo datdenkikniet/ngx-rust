@@ -140,6 +140,7 @@ unsafe extern "C" fn check_async_work_done(event: *mut ngx_event_t) {
     }
 }
 
+#[derive(Default)]
 struct RequestCTX {
     event_data: Option<Arc<EventData>>,
 }
@@ -176,7 +177,7 @@ http_request_handler!(async_access_handler, |request: &mut http::Request| {
     let event_data = unsafe {
         let ctx = request.get_inner().ctx.add(ngx_http_async_module.ctx_index);
         if (*ctx).is_null() {
-            let ctx_data = &mut *(request.pool().alloc(std::mem::size_of::<RequestCTX>()) as *mut RequestCTX);
+            let ctx_data = &mut *(request.pool().allocate(RequestCTX::default()).unwrap().as_ptr());
             ctx_data.event_data = Some(Arc::new(EventData {
                 done_flag: AtomicBool::new(false),
                 request: &request.get_inner() as *const _ as *mut _,
@@ -203,7 +204,8 @@ http_request_handler!(async_access_handler, |request: &mut http::Request| {
 
     // create a posted event
     unsafe {
-        let event = &mut *(request.pool().calloc(std::mem::size_of::<ngx_event_t>()) as *mut ngx_event_t);
+        let event =
+            (&mut *(request.pool().allocate_uninit_zeroed::<ngx_event_t>().unwrap().as_ptr())).assume_init_mut();
         event.handler = Some(check_async_work_done);
         event.data = Arc::into_raw(event_data.clone()) as _;
         event.log = (*ngx_cycle).log;
