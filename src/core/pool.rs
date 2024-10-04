@@ -2,6 +2,7 @@ use crate::core::buffer::{Buffer, MemoryBuffer, TemporaryBuffer};
 use crate::ffi::*;
 
 use std::os::raw::c_void;
+use std::ptr::NonNull;
 use std::{mem, ptr};
 
 /// Wrapper struct for an `ngx_pool_t` pointer, providing methods for working with memory pools.
@@ -23,10 +24,7 @@ impl Pool {
     /// Returns `Some(TemporaryBuffer)` if the buffer is successfully created, or `None` if allocation fails.
     pub fn create_buffer(&mut self, size: usize) -> Option<TemporaryBuffer> {
         let buf = unsafe { ngx_create_temp_buf(self.0, size) };
-        if buf.is_null() {
-            return None;
-        }
-
+        let buf = NonNull::new(buf)?;
         Some(TemporaryBuffer::from_ngx_buf(buf))
     }
 
@@ -48,20 +46,18 @@ impl Pool {
     /// Returns `Some(MemoryBuffer)` if the buffer is successfully created, or `None` if allocation fails.
     pub fn create_buffer_from_static_str(&mut self, str: &'static str) -> Option<MemoryBuffer> {
         let buf = self.calloc_type::<ngx_buf_t>();
-        if buf.is_null() {
-            return None;
-        }
+        let buf = NonNull::new(buf)?;
 
         // We cast away const, but buffers with the memory flag are read-only
         let start = str.as_ptr() as *mut u8;
         let end = unsafe { start.add(str.len()) };
 
         unsafe {
-            (*buf).start = start;
-            (*buf).pos = start;
-            (*buf).last = end;
-            (*buf).end = end;
-            (*buf).set_memory(1);
+            (*buf.as_ptr()).start = start;
+            (*buf.as_ptr()).pos = start;
+            (*buf.as_ptr()).last = end;
+            (*buf.as_ptr()).end = end;
+            (*buf.as_ptr()).set_memory(1);
         }
 
         Some(MemoryBuffer::from_ngx_buf(buf))
