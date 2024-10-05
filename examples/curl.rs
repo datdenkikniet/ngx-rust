@@ -1,3 +1,4 @@
+use ngx::core::Array;
 use ngx::ffi::{
     nginx_version, ngx_array_push, ngx_command_t, ngx_conf_t, ngx_http_core_module, ngx_http_handler_pt,
     ngx_http_module_t, ngx_http_phases_NGX_HTTP_ACCESS_PHASE, ngx_http_request_t, ngx_int_t, ngx_module_t, ngx_str_t,
@@ -8,7 +9,7 @@ use ngx::http::MergeConfigError;
 use ngx::{core, core::Status, http, http::HTTPModule};
 use ngx::{http_request_handler, ngx_log_debug_http, ngx_null_command, ngx_string};
 use std::os::raw::{c_char, c_void};
-use std::ptr::addr_of;
+use std::ptr::{addr_of, NonNull};
 
 struct Module;
 
@@ -135,21 +136,19 @@ extern "C" fn ngx_http_curl_commands_set_enable(
     _cmd: *mut ngx_command_t,
     conf: *mut c_void,
 ) -> *mut c_char {
-    unsafe {
-        let conf = &mut *(conf as *mut ModuleConfig);
-        let args = (*(*cf).args).elts as *mut ngx_str_t;
+    let conf = unsafe { &mut *(conf as *mut ModuleConfig) };
+    let args = unsafe { Array::<ngx_str_t>::new(NonNull::new((*cf).args).unwrap()) };
 
-        let val = (*args.add(1)).to_str();
+    let val = &args[1].to_str();
 
-        // set default value optionally
+    // set default value optionally
+    conf.enable = false;
+
+    if val.len() == 2 && val.eq_ignore_ascii_case("on") {
+        conf.enable = true;
+    } else if val.len() == 3 && val.eq_ignore_ascii_case("off") {
         conf.enable = false;
-
-        if val.len() == 2 && val.eq_ignore_ascii_case("on") {
-            conf.enable = true;
-        } else if val.len() == 3 && val.eq_ignore_ascii_case("off") {
-            conf.enable = false;
-        }
-    };
+    }
 
     std::ptr::null_mut()
 }

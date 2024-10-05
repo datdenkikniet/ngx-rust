@@ -1,8 +1,10 @@
+mod array;
 mod buffer;
 mod pool;
 mod status;
 mod string;
 
+pub use array::*;
 pub use buffer::*;
 pub use pool::*;
 pub use status::*;
