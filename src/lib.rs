@@ -85,6 +85,69 @@ macro_rules! ngx_modules {
     };
 }
 
+/// Set up the context, http module definition and module definition for a HTTP module.
+///
+/// This macro takes a [`HTTPModule`](crate::http::HTTPModule) as first argument, and
+/// an array of `{MainConf, SrvConf, LocConf}`: [`Command`](crate::http::Command)s as commands.
+#[macro_export]
+macro_rules! http_module_conf {
+    ($module:ty, [$($ty:tt: $command:expr),*]) => {{
+        #[used]
+        static mut COMMANDS: [ngx::ffi::ngx_command_t; $crate::count!($($command,)*) + 1] = [
+            $(
+                $crate::command!($module, $ty, $command),
+            )*
+            $crate::ngx_null_command!(),
+        ];
+
+        #[used]
+        static mut HTTP_MODULE: ngx::ffi::ngx_http_module_t = ngx::ffi::ngx_http_module_t {
+            preconfiguration: Some(<$module as ngx::http::HTTPModule>::preconfiguration),
+            postconfiguration: Some(<$module as ngx::http::HTTPModule>::postconfiguration),
+            create_main_conf: Some(<$module as ngx::http::HTTPModule>::create_main_conf),
+            init_main_conf: Some(<$module as ngx::http::HTTPModule>::init_main_conf),
+            create_srv_conf: Some(<$module as ngx::http::HTTPModule>::create_srv_conf),
+            merge_srv_conf: Some(<$module as ngx::http::HTTPModule>::merge_srv_conf),
+            create_loc_conf: Some(<$module as ngx::http::HTTPModule>::create_loc_conf),
+            merge_loc_conf: Some(<$module as ngx::http::HTTPModule>::merge_loc_conf),
+        };
+
+        #[used]
+        pub static mut MODULE: ngx_module_t = ngx_module_t {
+            ctx_index: ngx_uint_t::MAX,
+            index: ngx_uint_t::MAX,
+            name: std::ptr::null_mut(),
+            spare0: 0,
+            spare1: 0,
+            version: ngx::ffi::nginx_version as ngx_uint_t,
+            signature: ngx::ffi::NGX_RS_MODULE_SIGNATURE.as_ptr() as _,
+
+            ctx: unsafe { std::ptr::addr_of_mut!(HTTP_MODULE) } as _,
+            commands: unsafe { std::ptr::addr_of_mut!(COMMANDS) } as _,
+            type_: ngx::ffi::NGX_HTTP_MODULE as ngx_uint_t,
+
+            init_master: None,
+            init_module: None,
+            init_process: None,
+            init_thread: None,
+            exit_thread: None,
+            exit_process: None,
+            exit_master: None,
+
+            spare_hook0: 0,
+            spare_hook1: 0,
+            spare_hook2: 0,
+            spare_hook3: 0,
+            spare_hook4: 0,
+            spare_hook5: 0,
+            spare_hook6: 0,
+            spare_hook7: 0,
+        };
+
+        unsafe { MODULE }
+    }};
+}
+
 /// Count number of arguments
 #[macro_export]
 macro_rules! count {

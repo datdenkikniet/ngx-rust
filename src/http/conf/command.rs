@@ -4,6 +4,7 @@ use nginx_sys::*;
 
 use crate::core::Array;
 
+// TODO: this can return an error of type &'static CStr?
 type Set<T> = fn(&mut T, args: Array<ngx_str_t>) -> Result<(), ()>;
 
 /// A builder struct for a [`ngx_command_t`].

@@ -11,7 +11,7 @@ macro_rules! command {
         type Config = $crate::command!(ty: $module, $config_type);
         const OFFSET: $crate::http::ConfOffset = $crate::command!(offset: $config_type);
 
-        const COMMAND: Command<Config> = $command;
+        const __COMMAND: Command<Config> = $command;
         const SET: fn(&mut Config, Array<$crate::ffi::ngx_str_t>) -> Result<(), ()> = COMMAND.set();
 
         extern "C" fn set(cf: *mut ngx_conf_t, _cmd: *mut ngx_command_t, conf: *mut c_void) -> *mut i8 {
@@ -30,7 +30,7 @@ macro_rules! command {
             }
         }
 
-        COMMAND.build(OFFSET, set)
+        __COMMAND.build(OFFSET, set)
     }};
 
     (ty: $module:ty, $ty:ident) => {
