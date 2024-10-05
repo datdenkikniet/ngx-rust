@@ -1,4 +1,5 @@
 use http::HeaderMap;
+use ngx::core::NGX_CONF_OK;
 use ngx::ffi::{
     nginx_version, ngx_array_push, ngx_command_t, ngx_conf_t, ngx_http_core_module, ngx_http_handler_pt,
     ngx_http_module_t, ngx_http_phases_NGX_HTTP_PRECONTENT_PHASE, ngx_http_request_t, ngx_int_t, ngx_module_t,
@@ -206,7 +207,7 @@ extern "C" fn ngx_http_awssigv4_commands_set_enable(
         }
     };
 
-    std::ptr::null_mut()
+    NGX_CONF_OK as _
 }
 
 #[no_mangle]
@@ -221,7 +222,7 @@ extern "C" fn ngx_http_awssigv4_commands_set_access_key(
         conf.access_key = (*args.add(1)).to_string();
     };
 
-    std::ptr::null_mut()
+    NGX_CONF_OK as _
 }
 
 #[no_mangle]
@@ -236,7 +237,7 @@ extern "C" fn ngx_http_awssigv4_commands_set_secret_key(
         conf.secret_key = (*args.add(1)).to_string();
     };
 
-    std::ptr::null_mut()
+    NGX_CONF_OK as _
 }
 
 #[no_mangle]
@@ -254,7 +255,8 @@ extern "C" fn ngx_http_awssigv4_commands_set_s3_bucket(
             return ngx::core::NGX_CONF_ERROR as _;
         }
     };
-    std::ptr::null_mut()
+
+    NGX_CONF_OK as _
 }
 
 #[no_mangle]
@@ -269,7 +271,7 @@ extern "C" fn ngx_http_awssigv4_commands_set_s3_endpoint(
         conf.s3_endpoint = (*args.add(1)).to_string();
     };
 
-    std::ptr::null_mut()
+    NGX_CONF_OK as _
 }
 
 http_request_handler!(awssigv4_header_handler, |request: &mut Request| {

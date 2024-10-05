@@ -63,4 +63,6 @@ ngx_codes! {
 
 /// NGX_CONF_ERROR - An error occurred while parsing and validating configuration.
 pub const NGX_CONF_ERROR: *const () = -1isize as *const ();
-// pub const CONF_OK: Status = Status(NGX_CONF_OK as ngx_int_t);
+
+/// Status pointe rto return if parsing and validating configuration succeeded.
+pub const NGX_CONF_OK: *const () = std::ptr::null();

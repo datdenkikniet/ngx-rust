@@ -7,7 +7,7 @@
  * to the community at large.
  */
 use ngx::{
-    core::{Pool, Status},
+    core::{Pool, Status, NGX_CONF_OK},
     ffi::{
         nginx_version, ngx_atoi, ngx_command_t, ngx_conf_log_error, ngx_conf_t, ngx_connection_t,
         ngx_event_free_peer_pt, ngx_event_get_peer_pt, ngx_http_module_t, ngx_http_request_t,
@@ -327,8 +327,8 @@ unsafe extern "C" fn ngx_http_upstream_commands_set_custom(
     (*uscf).peer.init_upstream = Some(ngx_http_upstream_init_custom);
 
     ngx_log_debug_mask!(DebugMask::Http, (*cf).log, "CUSTOM UPSTREAM end module init");
-    // NGX_CONF_OK
-    std::ptr::null_mut()
+
+    NGX_CONF_OK as _
 }
 
 // The upstream module.

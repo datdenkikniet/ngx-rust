@@ -1,4 +1,4 @@
-use ngx::core::Array;
+use ngx::core::{Array, NGX_CONF_OK};
 use ngx::ffi::{
     nginx_version, ngx_array_push, ngx_command_t, ngx_conf_t, ngx_http_core_module, ngx_http_handler_pt,
     ngx_http_module_t, ngx_http_phases_NGX_HTTP_ACCESS_PHASE, ngx_http_request_t, ngx_int_t, ngx_module_t, ngx_str_t,
@@ -150,5 +150,5 @@ extern "C" fn ngx_http_curl_commands_set_enable(
         conf.enable = false;
     }
 
-    std::ptr::null_mut()
+    NGX_CONF_OK as _
 }
