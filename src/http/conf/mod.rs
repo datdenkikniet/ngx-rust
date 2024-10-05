@@ -2,6 +2,11 @@ use crate::ffi::*;
 
 use std::os::raw::c_void;
 
+mod command;
+mod macros;
+
+pub use command::*;
+
 /// # Safety
 ///
 /// The caller has provided a valid `ngx_conf_t` that points to valid memory and is non-null.

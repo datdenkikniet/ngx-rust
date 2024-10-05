@@ -1,13 +1,12 @@
-use ngx::core::{Array, NGX_CONF_OK};
+use ngx::core::Array;
 use ngx::ffi::{
     nginx_version, ngx_array_push, ngx_command_t, ngx_conf_t, ngx_http_core_module, ngx_http_handler_pt,
     ngx_http_module_t, ngx_http_phases_NGX_HTTP_ACCESS_PHASE, ngx_http_request_t, ngx_int_t, ngx_module_t, ngx_str_t,
-    ngx_uint_t, NGX_CONF_TAKE1, NGX_HTTP_LOC_CONF, NGX_HTTP_MODULE, NGX_RS_HTTP_LOC_CONF_OFFSET,
-    NGX_RS_MODULE_SIGNATURE,
+    ngx_uint_t, NGX_HTTP_MODULE, NGX_RS_MODULE_SIGNATURE,
 };
-use ngx::http::MergeConfigError;
+use ngx::http::{Command, CommandContext, MergeConfigError};
 use ngx::{core, core::Status, http, http::HTTPModule};
-use ngx::{http_request_handler, ngx_log_debug_http, ngx_null_command, ngx_string};
+use ngx::{http_request_handler, ngx_log_debug_http, ngx_null_command};
 use std::os::raw::{c_char, c_void};
 use std::ptr::{addr_of, NonNull};
 
@@ -37,18 +36,14 @@ struct ModuleConfig {
     enable: bool,
 }
 
+const COMMAND: ngx_command_t = ngx::command!(
+    Module,
+    LocConf,
+    Command::new(c"curl", http::ArgType::Flag, &[CommandContext::Loc], set_curl)
+);
+
 #[no_mangle]
-static mut ngx_http_curl_commands: [ngx_command_t; 2] = [
-    ngx_command_t {
-        name: ngx_string!("curl"),
-        type_: (NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1) as ngx_uint_t,
-        set: Some(ngx_http_curl_commands_set_enable),
-        conf: NGX_RS_HTTP_LOC_CONF_OFFSET,
-        offset: 0,
-        post: std::ptr::null_mut(),
-    },
-    ngx_null_command!(),
-];
+static mut ngx_http_curl_commands: [ngx_command_t; 2] = [COMMAND, ngx_null_command!()];
 
 #[no_mangle]
 static ngx_http_curl_module_ctx: ngx_http_module_t = ngx_http_module_t {
@@ -130,16 +125,8 @@ http_request_handler!(curl_access_handler, |request: &mut http::Request| {
     }
 });
 
-#[no_mangle]
-extern "C" fn ngx_http_curl_commands_set_enable(
-    cf: *mut ngx_conf_t,
-    _cmd: *mut ngx_command_t,
-    conf: *mut c_void,
-) -> *mut c_char {
-    let conf = unsafe { &mut *(conf as *mut ModuleConfig) };
-    let args = unsafe { Array::<ngx_str_t>::new(NonNull::new((*cf).args).unwrap()) };
-
-    let val = &args[1].to_str();
+fn set_curl(conf: &mut ModuleConfig, args: Array<ngx_str_t>) -> Result<(), ()> {
+    let val = args[1].to_str();
 
     // set default value optionally
     conf.enable = false;
@@ -150,5 +137,5 @@ extern "C" fn ngx_http_curl_commands_set_enable(
         conf.enable = false;
     }
 
-    NGX_CONF_OK as _
+    Ok(())
 }
