@@ -45,7 +45,7 @@ impl Merge for () {
 /// layers.
 ///
 /// See https://nginx.org/en/docs/dev/development_guide.html#adding_new_modules for details.
-pub trait HTTPModule {
+pub trait RawHttpModule {
     /// Configuration in the `http` block.
     type MainConf: Merge + Default;
     /// Configuration in a `server` block within the `http` block.

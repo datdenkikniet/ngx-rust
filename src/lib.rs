@@ -87,7 +87,7 @@ macro_rules! ngx_modules {
 
 /// Set up the context, http module definition and module definition for a HTTP module.
 ///
-/// This macro takes a [`HTTPModule`](crate::http::HTTPModule) as first argument, and
+/// This macro takes a [`RawHttpModule`](crate::http::RawHttpModule) as first argument, and
 /// an array of `{MainConf, SrvConf, LocConf}`: [`Command`](crate::http::Command)s as commands.
 #[macro_export]
 macro_rules! http_module_conf {
@@ -102,14 +102,14 @@ macro_rules! http_module_conf {
 
         #[used]
         static mut HTTP_MODULE: ngx::ffi::ngx_http_module_t = ngx::ffi::ngx_http_module_t {
-            preconfiguration: Some(<$module as ngx::http::HTTPModule>::preconfiguration),
-            postconfiguration: Some(<$module as ngx::http::HTTPModule>::postconfiguration),
-            create_main_conf: Some(<$module as ngx::http::HTTPModule>::create_main_conf),
-            init_main_conf: Some(<$module as ngx::http::HTTPModule>::init_main_conf),
-            create_srv_conf: Some(<$module as ngx::http::HTTPModule>::create_srv_conf),
-            merge_srv_conf: Some(<$module as ngx::http::HTTPModule>::merge_srv_conf),
-            create_loc_conf: Some(<$module as ngx::http::HTTPModule>::create_loc_conf),
-            merge_loc_conf: Some(<$module as ngx::http::HTTPModule>::merge_loc_conf),
+            preconfiguration: Some(<$module as ngx::http::RawHttpModule>::preconfiguration),
+            postconfiguration: Some(<$module as ngx::http::RawHttpModule>::postconfiguration),
+            create_main_conf: Some(<$module as ngx::http::RawHttpModule>::create_main_conf),
+            init_main_conf: Some(<$module as ngx::http::RawHttpModule>::init_main_conf),
+            create_srv_conf: Some(<$module as ngx::http::RawHttpModule>::create_srv_conf),
+            merge_srv_conf: Some(<$module as ngx::http::RawHttpModule>::merge_srv_conf),
+            create_loc_conf: Some(<$module as ngx::http::RawHttpModule>::create_loc_conf),
+            merge_loc_conf: Some(<$module as ngx::http::RawHttpModule>::merge_loc_conf),
         };
 
         #[used]

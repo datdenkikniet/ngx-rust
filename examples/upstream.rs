@@ -18,7 +18,7 @@ use ngx::{
     },
     http::{
         ngx_http_conf_get_module_srv_conf, ngx_http_conf_upstream_srv_conf_immutable,
-        ngx_http_conf_upstream_srv_conf_mutable, HTTPModule, Merge, MergeConfigError, Request,
+        ngx_http_conf_upstream_srv_conf_mutable, Merge, MergeConfigError, RawHttpModule, Request,
     },
     http_upstream_init_peer_pt,
     log::DebugMask,
@@ -336,7 +336,7 @@ unsafe extern "C" fn ngx_http_upstream_commands_set_custom(
 // implemented is our `create_srv_conf` method.
 struct Module;
 
-impl HTTPModule for Module {
+impl RawHttpModule for Module {
     type MainConf = ();
     type SrvConf = SrvConfig;
     type LocConf = ();

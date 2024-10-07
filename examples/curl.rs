@@ -11,7 +11,7 @@ use std::ptr::{addr_of, NonNull};
 
 struct Module;
 
-impl http::HTTPModule for Module {
+impl http::RawHttpModule for Module {
     type MainConf = ();
     type SrvConf = ();
     type LocConf = ModuleConfig;

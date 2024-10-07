@@ -5,7 +5,7 @@ use ngx::ffi::{
     NGX_HTTP_LOC_CONF, NGX_HTTP_MODULE, NGX_RS_HTTP_LOC_CONF_OFFSET, NGX_RS_MODULE_SIGNATURE,
 };
 use ngx::http::MergeConfigError;
-use ngx::{core, core::Status, http, http::HTTPModule};
+use ngx::{core, core::Status, http, http::RawHttpModule};
 use ngx::{http_request_handler, ngx_log_debug_http, ngx_null_command, ngx_string};
 use std::os::raw::{c_char, c_void};
 use std::ptr::{addr_of, addr_of_mut};
@@ -16,7 +16,7 @@ use tokio::runtime::Runtime;
 
 struct Module;
 
-impl http::HTTPModule for Module {
+impl http::RawHttpModule for Module {
     type MainConf = ();
     type SrvConf = ();
     type LocConf = ModuleConfig;

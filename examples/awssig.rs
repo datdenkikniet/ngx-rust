@@ -13,7 +13,7 @@ use std::ptr::addr_of;
 
 struct Module;
 
-impl HTTPModule for Module {
+impl RawHttpModule for Module {
     type MainConf = ();
     type SrvConf = ();
     type LocConf = ModuleConfig;

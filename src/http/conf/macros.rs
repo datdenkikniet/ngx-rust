@@ -34,7 +34,7 @@ macro_rules! command {
     }};
 
     (ty: $module:ty, $ty:ident) => {
-        <$module as $crate::http::HTTPModule>::$ty
+        <$module as $crate::http::RawHttpModule>::$ty
     };
 
     (offset: LocConf) => {
