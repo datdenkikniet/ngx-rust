@@ -8,25 +8,35 @@ use ngx::{core, core::Status, http};
 use ngx::{http_request_handler, ngx_log_debug_http};
 use std::os::raw::{c_char, c_void};
 use std::ptr::{addr_of, NonNull};
+use std::time::SystemTime;
 
 struct Module;
 
-impl http::RawHttpModule for Module {
+impl http::HttpModule for Module {
     type MainConf = ();
     type SrvConf = ();
     type LocConf = ModuleConfig;
 
-    unsafe extern "C" fn postconfiguration(cf: *mut ngx_conf_t) -> ngx_int_t {
-        let cmcf = http::ngx_http_conf_get_module_main_conf(cf, &*addr_of!(ngx_http_core_module));
+    fn postconfiguration(cf: &mut ngx_conf_t) -> Result<(), ()> {
+        println!(
+            "Postconfig: {} us",
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_micros()
+        );
 
-        let h = ngx_array_push(&mut (*cmcf).phases[ngx_http_phases_NGX_HTTP_ACCESS_PHASE as usize].handlers)
+        let cmcf = unsafe { http::ngx_http_conf_get_module_main_conf(cf, &*addr_of!(ngx_http_core_module)) };
+
+        let h = unsafe { ngx_array_push(&mut (*cmcf).phases[ngx_http_phases_NGX_HTTP_ACCESS_PHASE as usize].handlers) }
             as *mut ngx_http_handler_pt;
         if h.is_null() {
-            return core::Status::NGX_ERROR.into();
+            return Err(());
         }
         // set an Access phase handler
-        *h = Some(curl_access_handler);
-        core::Status::NGX_OK.into()
+        unsafe { *h = Some(curl_access_handler) };
+
+        Ok(())
     }
 }
 
